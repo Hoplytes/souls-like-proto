@@ -41,6 +41,12 @@ Prototype de combat souls-like en vue de dessus, en pixel art, fait avec **Godot
 | `tools/compose_lpc.py` | Assemble les sprites LPC en planches pour Godot |
 | `tools/autotest.gd` | Partie automatique qui prend des captures (`godot -- --autotest=<dossier>`) |
 
+## Décors
+
+Le sol (herbe dorée d'automne, chemins pavés), les arbres, rochers, plantes et piliers viennent de
+[LPC Revised](https://github.com/ElizaWy/LPC). `scripts/ground.gd` choisit automatiquement les tuiles
+de bord et d'angle de l'herbe ; `scripts/prop.gd` place les éléments de décor.
+
 ## Régénérer les sprites
 
 Les planches de `assets/sprites/` sont produites à partir du dépôt
@@ -49,9 +55,10 @@ Les planches de `assets/sprites/` sont produites à partir du dépôt
 ```bash
 python3 tools/compose_lpc.py <chemin-du-dépôt-LPC>/spritesheets
 python3 tools/lpc_credits.py <chemin-du-dépôt-LPC>/CREDITS.csv
+python3 tools/extract_env.py <chemin-du-dépôt-LPC-Revised>
 ```
 
 ## Licences
 
 Les sprites LPC sont sous licences libres (OGA-BY 3.0, CC-BY-SA 3.0 ou GPL 3.0 selon les pièces) :
-voir [CREDITS-LPC.md](CREDITS-LPC.md). Ces crédits doivent accompagner le jeu s'il est distribué.
+voir [CREDITS-LPC.md](CREDITS-LPC.md). Les décors sont sous licence OGA-BY 3.0 : voir [CREDITS-ENV.md](CREDITS-ENV.md). Ces crédits doivent accompagner le jeu s'il est distribué.

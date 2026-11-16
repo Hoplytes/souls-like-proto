@@ -1,69 +1,125 @@
 extends Node2D
-## Draws the ground: moss and dirt outside, a paved arena for the boss and a
-## dirt path between them. All textures are generated at start-up.
+## The ground, built from LPC Revised tiles: cobbled dirt everywhere, golden
+## autumn grass on top with proper edges (picked from each cell's
+## neighbours), and the paved boss arena.
+
+const CELL := 32
+const DIRT := [Vector2i(3, 3), Vector2i(4, 3), Vector2i(5, 3), Vector2i(3, 4), Vector2i(4, 4), Vector2i(5, 4)]
+const GRASS := [Vector2i(3, 1), Vector2i(4, 1), Vector2i(5, 1), Vector2i(3, 2), Vector2i(4, 2), Vector2i(5, 2)]
 
 var world_rect := Rect2()
 var arena_center := Vector2.ZERO
 var arena_radius := 200.0
 var path_points := PackedVector2Array()
-var _grass: ImageTexture
-var _stone: ImageTexture
-var _decals: Array = []
+var clearings: Array = []  # [center, radius] patches of bare dirt
+var _grass := {}
+var _cols := 0
+var _rows := 0
+var _slabs: Texture2D
 
 func _ready() -> void:
 	z_index = -10
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-	_grass = _make_grass()
-	_stone = _make_stone()
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
-	for i in 260:
-		_decals.append([Vector2(rng.randf_range(world_rect.position.x, world_rect.end.x),
-			rng.randf_range(world_rect.position.y, world_rect.end.y)), rng.randi() % 3])
+	_slabs = load("res://assets/env/arena_slabs.png")
+	_cols = int(ceil(world_rect.size.x / CELL))
+	_rows = int(ceil(world_rect.size.y / CELL))
+	var ts := TileSet.new()
+	ts.tile_size = Vector2i(CELL, CELL)
+	var src := TileSetAtlasSource.new()
+	src.texture = load("res://assets/env/terrain_autumn.png")
+	src.texture_region_size = Vector2i(CELL, CELL)
+	for c in 6:
+		for r in 8:
+			src.create_tile(Vector2i(c, r))
+	ts.add_source(src, 0)
+	var base := TileMapLayer.new()
+	base.tile_set = ts
+	add_child(base)
+	var arena := Node2D.new()  # drawn between the dirt and the grass
+	arena.draw.connect(_draw_arena.bind(arena))
+	arena.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	add_child(arena)
+	var grass := TileMapLayer.new()
+	grass.tile_set = ts
+	add_child(grass)
 
-func _make_grass() -> ImageTexture:
-	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 1
-	for y in 64:
-		for x in 64:
-			var n := rng.randf()
-			var c := Color(0.16, 0.2, 0.15)
-			if n > 0.9:
-				c = Color(0.21, 0.26, 0.18)
-			elif n < 0.08:
-				c = Color(0.12, 0.15, 0.12)
-			img.set_pixel(x, y, c)
-	return ImageTexture.create_from_image(img)
+	rng.seed = 3
+	_build_mask()
+	for x in _cols:
+		for y in _rows:
+			base.set_cell(Vector2i(x, y), 0, DIRT[rng.randi() % DIRT.size()])
+			if _is_grass(x, y):
+				grass.set_cell(Vector2i(x, y), 0, _grass_tile(x, y, rng))
 
-func _make_stone() -> ImageTexture:
-	var img := Image.create(32, 32, false, Image.FORMAT_RGBA8)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 2
-	for y in 32:
-		for x in 32:
-			var c := Color(0.3, 0.29, 0.31).darkened(rng.randf() * 0.12)
-			if y % 16 == 0 or (x + (8 if (y / 16) % 2 == 1 else 0)) % 16 == 0:
-				c = Color(0.18, 0.17, 0.2)
-			img.set_pixel(x, y, c)
-	return ImageTexture.create_from_image(img)
+func _cell_center(x: int, y: int) -> Vector2:
+	return world_rect.position + Vector2(x + 0.5, y + 0.5) * CELL
 
-func _draw() -> void:
-	draw_texture_rect(_grass, world_rect, true)
+func _build_mask() -> void:
+	for x in _cols:
+		for y in _rows:
+			_grass[Vector2i(x, y)] = not _is_bare(_cell_center(x, y))
+	# Remove one-cell-thin strips: the tiles cannot draw them.
+	var changed := true
+	while changed:
+		changed = false
+		for x in _cols:
+			for y in _rows:
+				if _is_grass(x, y) and ((not _is_grass(x, y - 1) and not _is_grass(x, y + 1)) or
+						(not _is_grass(x - 1, y) and not _is_grass(x + 1, y))):
+					_grass[Vector2i(x, y)] = false
+					changed = true
+
+func _is_bare(p: Vector2) -> bool:
+	if p.distance_to(arena_center) < arena_radius + 20:
+		return true
+	for c in clearings:
+		if p.distance_to(c[0]) < c[1]:
+			return true
 	for i in range(path_points.size() - 1):
-		draw_line(path_points[i], path_points[i + 1], Color(0.24, 0.2, 0.15), 46)
-		draw_circle(path_points[i], 23, Color(0.24, 0.2, 0.15))
-	for d in _decals:
-		match d[1]:
-			0: draw_line(d[0], d[0] + Vector2(1, -4), Color(0.26, 0.32, 0.2), 1)
-			1: draw_rect(Rect2(d[0], Vector2(2, 1)), Color(0.35, 0.33, 0.3))
-			2: draw_circle(d[0], 1.5, Color(0.45, 0.2, 0.2))
-	# Paved boss arena: a stone texture clipped to a circle.
+		if Geometry2D.get_closest_point_to_segment(p, path_points[i], path_points[i + 1]).distance_to(p) < 34:
+			return true
+	return false
+
+func _is_grass(x: int, y: int) -> bool:
+	if x < 0 or y < 0 or x >= _cols or y >= _rows:
+		return true
+	return _grass[Vector2i(x, y)]
+
+## Edge and corner tiles come from the 3x3 "grass island" block (0..2, 0..2)
+## and inner corners from the 2x2 "grass with a hole" block (0..1, 6..7).
+func _grass_tile(x: int, y: int, rng: RandomNumberGenerator) -> Vector2i:
+	var n := _is_grass(x, y - 1)
+	var s := _is_grass(x, y + 1)
+	var w := _is_grass(x - 1, y)
+	var e := _is_grass(x + 1, y)
+	var col := 1
+	var row := 1
+	if not w:
+		col = 0
+	elif not e:
+		col = 2
+	if not n:
+		row = 0
+	elif not s:
+		row = 2
+	if col != 1 or row != 1:
+		return Vector2i(col, row)
+	if not _is_grass(x + 1, y + 1):
+		return Vector2i(0, 6)
+	if not _is_grass(x - 1, y + 1):
+		return Vector2i(1, 6)
+	if not _is_grass(x + 1, y - 1):
+		return Vector2i(0, 7)
+	if not _is_grass(x - 1, y - 1):
+		return Vector2i(1, 7)
+	return GRASS[rng.randi() % GRASS.size()]
+
+func _draw_arena(node: Node2D) -> void:
 	var pts := PackedVector2Array()
 	var uvs := PackedVector2Array()
-	for i in 48:
-		var p := arena_center + Vector2.RIGHT.rotated(i * TAU / 48) * arena_radius
+	for i in 64:
+		var p := arena_center + Vector2.RIGHT.rotated(i * TAU / 64) * arena_radius
 		pts.append(p)
-		uvs.append(p / 32.0)
-	draw_colored_polygon(pts, Color.WHITE, uvs, _stone)
-	draw_arc(arena_center, arena_radius, 0, TAU, 48, Color(0.15, 0.14, 0.17), 4)
+		uvs.append(p / 64.0)
+	node.draw_colored_polygon(pts, Color.WHITE, uvs, _slabs)
