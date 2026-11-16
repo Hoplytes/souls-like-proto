@@ -102,7 +102,7 @@ func _physics_process(delta: float) -> void:
 				sprite.position.y = 0
 				collision_mask = 1 | 2
 				var radius := 52.0 if phase == 1 else 64.0
-				Hitbox.spawn(get_parent(), self, global_position, 0, "circle", Vector2(radius, 0), 30, 60, 8, 0.12)
+				Hitbox.spawn(get_parent(), self, global_position, 0, "circle", Vector2(radius, 0), 30, 60, 8, 0.12, true)
 				Fx.ring(get_parent(), global_position, 6, radius, Color(1, 0.8, 0.5), 0.3, 3)
 				Fx.shake(8)
 				if phase == 2:
@@ -177,7 +177,7 @@ func _shockwave(radius: float) -> void:
 		if dead:
 			return
 		Fx.ring(get_parent(), global_position, radius, radius * 1.9, Color(1, 0.4, 0.3), 0.35, 4)
-		Hitbox.spawn(get_parent(), self, global_position, 0, "circle", Vector2(radius * 1.8, 0), 18, 20, 8, 0.1))
+		Hitbox.spawn(get_parent(), self, global_position, 0, "circle", Vector2(radius * 1.8, 0), 18, 20, 8, 0.1, true))
 
 func _recover() -> void:
 	_go(State.RECOVER)
@@ -206,6 +206,21 @@ func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 		Fx.shake(8)
 		phase_changed.emit(2)
 	return hit
+
+## A parried boss loses a chunk of poise and its combo; when the poise
+## breaks it is staggered and open to a riposte.
+func on_parried() -> void:
+	poise -= 45.0
+	_follow_up = false
+	if poise <= 0.0:
+		poise = max_poise
+		open_to_riposte()
+		on_stagger()
+	else:
+		_go(State.RECOVER)
+		_recover_time = 0.9
+		sprite.position.y = 0
+		sprite.modulate = base_modulate()
 
 func knockback_strength(_dmg: int) -> float:
 	return 25.0 if state != State.STAGGER else 60.0

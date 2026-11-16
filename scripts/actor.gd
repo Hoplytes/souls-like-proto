@@ -51,9 +51,28 @@ func _draw() -> void:
 func regen_poise(delta: float) -> void:
 	poise = minf(max_poise, poise + poise_regen * delta)
 
+var _riposte_until := 0
+
+## Called by a Hitbox. The player overrides it to block and parry.
+func receive_hit(h: Hitbox) -> void:
+	take_hit(h.damage, h.poise_damage, h.origin())
+
+## Called on the attacker when the player parries it.
+func on_parried() -> void:
+	open_to_riposte()
+	on_stagger()
+
+func open_to_riposte(seconds: float = 1.6) -> void:
+	_riposte_until = Time.get_ticks_msec() + int(seconds * 1000)
+
 func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 	if dead or invulnerable:
 		return false
+	if Time.get_ticks_msec() < _riposte_until:
+		_riposte_until = 0
+		dmg *= 2
+		poise_dmg *= 2
+		Fx.float_text(get_parent(), global_position + Vector2(0, -body_height - 14), "Riposte !", Color(1, 0.85, 0.3))
 	hp = maxi(0, hp - dmg)
 	poise -= poise_dmg
 	damaged.emit(dmg)

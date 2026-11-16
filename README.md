@@ -9,6 +9,7 @@ Prototype de combat souls-like en vue de dessus, en pixel art, fait avec **Godot
 
 - Un **hoplite spartiate** (casque à crête, cuirasse de bronze, cape rouge, bouclier rond), deux armes : **lance** (longue portée, attaque lourde en fente) et **épée courte** (rapide, arc large).
 - **Roulade** avec frames d'invincibilité, **endurance**, attaques **légères** (combo x3) et **lourdes** (super-armure pendant le coup).
+- **Bouclier** : maintenir pour bloquer les coups de face (coûte de l'endurance ; à court d'endurance, la garde est brisée). Le lever **au moment de l'impact** déclenche une **parade** : aucun coût, l'ennemi est déséquilibré et le coup suivant fait une **riposte** à double dégâts. Le saut écrasant et l'onde de choc du boss ne se bloquent pas : il faut rouler.
 - **Fioles** de soin (3) et un **feu de camp** : se reposer remet la santé et les fioles, et fait revenir les ennemis.
 - 4 **squelettes** qui annoncent leurs attaques et laissent une fenêtre de punition.
 - Le boss **Gorvak, Geôlier des Ruines** : estoc, saut écrasant et charge, tous annoncés par une zone rouge. En dessous de 50 % de vie, il entre en rage (attaques plus rapides, double estoc, onde de choc). Une charge dans un mur l'étourdit.
@@ -18,10 +19,11 @@ Prototype de combat souls-like en vue de dessus, en pixel art, fait avec **Godot
 | Action | Clavier / souris | Manette |
 |---|---|---|
 | Se déplacer | ZQSD (AZERTY) / WASD (QWERTY) / flèches | Stick gauche, croix |
-| Roulade | Espace ou Maj | B |
+| Roulade | Espace | B |
+| Bouclier (maintenir) / parade | L ou Maj | LB |
 | Attaque légère | J ou clic gauche | X ou RB |
 | Attaque lourde | K ou clic droit | Y ou RT |
-| Boire une fiole | R | LB |
+| Boire une fiole | R | LT |
 | Changer d'arme | Tab | Select |
 | Se reposer au feu | E | A |
 | Aide | H | Start |

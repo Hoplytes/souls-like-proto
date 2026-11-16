@@ -5,11 +5,13 @@ extends Area2D
 var damage := 10
 var poise_damage := 10
 var source: Node2D
+var unblockable := false
 var _hit := {}
 
 static func spawn(parent: Node, src: Node2D, pos: Vector2, rot: float, shape_kind: String,
-		size: Vector2, dmg: int, poise: int, target_layer: int, life: float) -> Hitbox:
+		size: Vector2, dmg: int, poise: int, target_layer: int, life: float, no_block: bool = false) -> Hitbox:
 	var h := Hitbox.new()
+	h.unblockable = no_block
 	h.source = src
 	h.damage = dmg
 	h.poise_damage = poise
@@ -38,4 +40,7 @@ func _on_area(a: Area2D) -> void:
 	if target == null or target == source or _hit.has(target):
 		return
 	_hit[target] = true
-	target.take_hit(damage, poise_damage, source.global_position if is_instance_valid(source) else global_position)
+	target.receive_hit(self)
+
+func origin() -> Vector2:
+	return source.global_position if is_instance_valid(source) else global_position

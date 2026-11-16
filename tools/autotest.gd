@@ -24,6 +24,50 @@ func _press(action: String, hold: float = 0.08) -> void:
 	await _wait(hold)
 	Input.action_release(action)
 
+## Checks block, parry, riposte and an attack from behind with hand-made hits.
+func _shield_test(p: Player) -> void:
+	p.global_position = Vector2(600, 1250)
+	p.rest()
+	var sk := SkeletonEnemy.new()
+	sk.player = p
+	sk.position = p.global_position + Vector2(0, -30)
+	main.world.add_child(sk)
+	await _wait(0.3)
+	var hits: Array[Hitbox] = []
+	var make_hit := func(src: Node2D) -> Hitbox:
+		var h := Hitbox.new()
+		hits.append(h)
+		h.source = src
+		h.damage = 18
+		h.poise_damage = 10
+		return h
+	Input.action_press("block")
+	await _wait(0.05)
+	var hp0 := p.hp
+	p.receive_hit(make_hit.call(sk))
+	log_lines.append("parry: player hp %d->%d, skeleton state %d (stagger=%d)" % [hp0, p.hp, sk.state, SkeletonEnemy.State.STAGGER])
+	await _shot("11_parry")
+	await _wait(0.4)
+	var st0 := p.stamina
+	p.receive_hit(make_hit.call(sk))
+	log_lines.append("block: player hp %d, stamina %.0f->%.0f" % [p.hp, st0, p.stamina])
+	await _shot("12_block")
+	var behind := Node2D.new()
+	main.world.add_child(behind)
+	behind.global_position = p.global_position - p.facing * 30
+	p.receive_hit(make_hit.call(behind))
+	log_lines.append("from behind: player hp %d" % p.hp)
+	Input.action_release("block")
+	sk._riposte_until = Time.get_ticks_msec() + 1000
+	var skhp := sk.hp
+	sk.take_hit(16, 0, p.global_position)
+	log_lines.append("riposte: skeleton hp %d->%d (16 dmg doubled)" % [skhp, sk.hp])
+	sk.queue_free()
+	behind.queue_free()
+	for h in hits:
+		h.free()
+	await _wait(0.6)
+
 func _run() -> void:
 	var p: Player = main.player
 	await _wait(1.0)
@@ -44,7 +88,7 @@ func _run() -> void:
 	await _wait(1.0)
 	# Roll sideways and downwards in a clear spot, capturing the tumble.
 	var back := p.global_position
-	p.global_position = Vector2(250, 1250)
+	p.global_position = Vector2(600, 1250)
 	await _wait(0.6)
 	for dir in ["move_right", "move_down"]:
 		var start := p.global_position
@@ -64,6 +108,7 @@ func _run() -> void:
 	await _wait(0.4)
 	await _shot("05_spear_heavy")
 	log_lines.append("player hp %d stamina %d" % [p.hp, int(p.stamina)])
+	await _shield_test(p)
 	# Teleport to the arena entrance and wake the boss.
 	p.invulnerable = true
 	p.global_position = main.ARENA_C + Vector2(0, 150)

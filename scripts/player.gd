@@ -1,11 +1,12 @@
 class_name Player
 extends Actor
 ## The player, a Spartan hoplite: movement, roll with invincibility frames, stamina,
-## light/heavy attacks with combos, healing flasks and weapon swap.
+## light/heavy attacks with combos, shield block and parry, healing flasks
+## and weapon swap.
 
 signal stats_changed
 
-enum State { FREE, ROLL, ATTACK, HEAL, STAGGER, DEAD }
+enum State { FREE, ROLL, ATTACK, HEAL, BLOCK, STAGGER, DEAD }
 
 const SPEED := 95.0
 const ROLL_TIME := 0.48
@@ -16,6 +17,9 @@ const STAMINA_DELAY := 0.5
 const BUFFER_TIME := 0.3
 const HEAL_TIME := 0.9
 const HEAL_AMOUNT := 45
+const PARRY_WINDOW := 0.18  # seconds after raising the shield
+const BLOCK_ARC := deg_to_rad(75.0)  # half-angle of the shield's cover
+const BLOCK_SPEED := 0.45
 
 var max_stamina := 100.0
 var stamina := 100.0
@@ -37,6 +41,9 @@ var _atk_phase := 0
 var _combo := 0
 var _healed := false
 var _hit_iframes := 0.0
+var _stagger_time := 0.35
+var _guard: Node2D
+var _guard_flash := 0.0
 
 func _ready() -> void:
 	max_hp = 120
@@ -46,6 +53,10 @@ func _ready() -> void:
 	setup_body(_layers_for(weapon), 8)
 	sprite.pivot = 22.0  # rotate around the body's centre, for the roll
 	sprite.play("idle", 2.0)
+	_guard = Node2D.new()
+	_guard.z_index = 5
+	_guard.draw.connect(_draw_guard)
+	add_child(_guard)
 
 func _layers_for(w: String) -> Array:
 	var l: Array = Weapons.DATA[w].layers
@@ -67,17 +78,20 @@ func _physics_process(delta: float) -> void:
 		State.ROLL: _roll(delta)
 		State.ATTACK: _attack(delta)
 		State.HEAL: _heal(input)
+		State.BLOCK: _block(input)
 		State.STAGGER:
 			velocity = Vector2.ZERO
-			if _t >= 0.35:
+			if _t >= _stagger_time:
 				_to_free()
 	velocity += apply_knockback(delta)
 	move_and_slide()
+	_guard_flash = maxf(0.0, _guard_flash - delta)
+	_guard.queue_redraw()
 	invulnerable = (state == State.ROLL and _t > ROLL_IFRAMES.x and _t < ROLL_IFRAMES.y) or _hit_iframes > 0.0
 	stats_changed.emit()
 
 func _read_buffer(delta: float) -> void:
-	for a in ["roll", "attack_light", "attack_heavy", "heal", "switch_weapon"]:
+	for a in ["roll", "attack_light", "attack_heavy", "heal", "switch_weapon", "block"]:
 		if Input.is_action_just_pressed(a):
 			_buffer = a
 			_buffer_t = BUFFER_TIME
@@ -97,7 +111,8 @@ func _regen(delta: float) -> void:
 		return
 	_stamina_wait -= delta
 	if _stamina_wait <= 0.0:
-		stamina = minf(max_stamina, stamina + STAMINA_REGEN * delta * (0.5 if state == State.HEAL else 1.0))
+		var k := 0.5 if state == State.HEAL else (0.3 if state == State.BLOCK else 1.0)
+		stamina = minf(max_stamina, stamina + STAMINA_REGEN * delta * k)
 
 func _spend(cost: float) -> bool:
 	if stamina <= 0.0:
@@ -116,8 +131,11 @@ func _to_free() -> void:
 func _free(input: Vector2) -> void:
 	if input != Vector2.ZERO:
 		facing = input.normalized()
-	var action := _take_buffer(["roll", "attack_light", "attack_heavy", "heal", "switch_weapon"])
+	var action := _take_buffer(["roll", "attack_light", "attack_heavy", "heal", "switch_weapon", "block"])
 	if _start_action(action, input):
+		return
+	if Input.is_action_pressed("block"):
+		_start_block()
 		return
 	velocity = input * SPEED
 	sprite.set_dir(LpcSprite.dir_from_vector(facing))
@@ -138,6 +156,9 @@ func _start_action(action: String, input: Vector2) -> bool:
 				_combo = 0
 				_start_attack(kind, input)
 				return true
+		"block":
+			_start_block()
+			return true
 		"heal":
 			if flasks > 0:
 				state = State.HEAL
@@ -273,6 +294,9 @@ func _attack(_delta: float) -> void:
 			var kind := "light" if _take_buffer(["attack_light", "attack_heavy"]) == "attack_light" else "heavy"
 			_combo += 1
 			_start_attack(kind, Input.get_vector("move_left", "move_right", "move_up", "move_down"))
+		elif k > 0.5 and _buffer == "block":
+			_buffer = ""
+			_start_block()
 		elif k > 0.5 and _buffer == "roll" and _spend(ROLL_COST):
 			_buffer = ""
 			_start_roll(Input.get_vector("move_left", "move_right", "move_up", "move_down"))
@@ -289,6 +313,108 @@ func _spawn_hitbox() -> void:
 			Color(1, 1, 1, 0.9) if _atk_kind == "light" else Color(1, 0.85, 0.5))
 	else:
 		Fx.ring(get_parent(), pos + facing * _atk.size.x * 0.4, 2, 10, Color(1, 1, 1, 0.8), 0.12)
+
+# --- shield: block and parry ---------------------------------------------
+
+func _start_block() -> void:
+	state = State.BLOCK
+	_t = 0.0
+	facing = _soft_lock(Vector2.ZERO) if _nearest_enemy(150.0) else facing
+	_block_pose()
+
+## Hoplite guard: spear drawn back behind the shield, or sword raised.
+func _block_pose() -> void:
+	sprite.set_dir(LpcSprite.dir_from_vector(facing))
+	if weapon == "spear":
+		sprite.play("thrust", 0.0, false, true)
+		sprite.set_frame(1)
+	else:
+		sprite.play("slash", 0.0, false, true)
+		sprite.set_frame(0)
+
+func _block(input: Vector2) -> void:
+	velocity = input * SPEED * BLOCK_SPEED
+	# Keep the shield toward the closest enemy, so you can circle around it.
+	var e := _nearest_enemy(150.0)
+	if e:
+		facing = (e.global_position - global_position).normalized()
+	elif input != Vector2.ZERO:
+		facing = input.normalized()
+	_block_pose()
+	var action := _take_buffer(["roll", "attack_light", "attack_heavy"])
+	if action == "roll" and _spend(ROLL_COST):
+		_start_roll(input)
+	elif action != "":
+		_combo = 0
+		_start_attack("light" if action == "attack_light" else "heavy", input)
+	elif not Input.is_action_pressed("block") and _t > 0.1:
+		_to_free()
+
+func _nearest_enemy(radius: float) -> Node2D:
+	var best: Node2D = null
+	var best_d := radius
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e.dead:
+			continue
+		var d := global_position.distance_to(e.global_position)
+		if d < best_d:
+			best_d = d
+			best = e
+	return best
+
+func is_parrying() -> bool:
+	return state == State.BLOCK and _t < PARRY_WINDOW
+
+func _covers(from: Vector2) -> bool:
+	var to_attacker := (from - global_position).normalized()
+	return absf(facing.angle_to(to_attacker)) <= BLOCK_ARC
+
+func receive_hit(h: Hitbox) -> void:
+	if dead or invulnerable:
+		return
+	var from := h.origin()
+	if state != State.BLOCK or h.unblockable or not _covers(from):
+		take_hit(h.damage, h.poise_damage, from)
+		return
+	var spark := global_position + Vector2(0, -20) + facing * 12
+	if is_parrying():
+		# Perfect parry: no cost, the attacker is thrown off balance.
+		stamina = minf(max_stamina, stamina + 10.0)
+		_guard_flash = 0.3
+		Fx.ring(get_parent(), spark, 2, 26, Color(1, 0.9, 0.4), 0.25, 3)
+		Fx.hit_spark(get_parent(), spark)
+		Fx.float_text(get_parent(), global_position + Vector2(0, -56), "Parade !", Color(1, 0.9, 0.4))
+		Fx.hitstop(get_tree(), 0.12)
+		Fx.shake(3)
+		if is_instance_valid(h.source) and h.source.has_method("on_parried"):
+			h.source.on_parried()
+		return
+	var cost := h.damage * 1.3 + h.poise_damage * 0.3
+	_stamina_wait = STAMINA_DELAY
+	knockback = (global_position - from).normalized() * (40.0 + h.damage * 2.0)
+	Fx.hit_spark(get_parent(), spark)
+	_guard_flash = 0.12
+	if stamina >= cost:
+		stamina -= cost
+		Fx.shake(2)
+		return
+	# Guard broken: the shield is knocked aside and half the blow gets through.
+	stamina = 0.0
+	Fx.float_text(get_parent(), global_position + Vector2(0, -56), "Garde brisée", Color(1, 0.5, 0.3))
+	take_hit(int(h.damage * 0.5), 99.0, from)
+	_stagger_time = 0.9
+
+func _draw_guard() -> void:
+	if state != State.BLOCK:
+		return
+	var c := Vector2(0, -20)
+	var a := facing.angle()
+	var col := Color(0.85, 0.6, 0.3, 0.55)
+	var w := 2.0
+	if is_parrying() or _guard_flash > 0.0:
+		col = Color(1, 0.95, 0.55, 0.95)
+		w = 3.0
+	_guard.draw_arc(c, 20, a - BLOCK_ARC * 0.8, a + BLOCK_ARC * 0.8, 14, col, w)
 
 # --- healing -------------------------------------------------------------
 
@@ -325,6 +451,7 @@ func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 func on_stagger() -> void:
 	state = State.STAGGER
 	_t = 0.0
+	_stagger_time = 0.35
 	sprite.modulate = Color.WHITE
 	_reset_sprite()
 	sprite.play("idle", 0.0)

@@ -18,6 +18,7 @@ var facing := Vector2.DOWN
 var _t := 0.0
 var _cooldown := 0.0
 var _wander := Vector2.ZERO
+var _stagger_time := 0.6
 
 func _ready() -> void:
 	max_hp = 70
@@ -86,7 +87,7 @@ func _physics_process(delta: float) -> void:
 				_go(State.CHASE)
 		State.STAGGER:
 			velocity = Vector2.ZERO
-			if _t >= 0.6:
+			if _t >= _stagger_time:
 				_go(State.CHASE)
 	velocity += apply_knockback(delta)
 	move_and_slide()
@@ -104,8 +105,16 @@ func _move(v: Vector2) -> void:
 	else:
 		sprite.play("idle", 2.0)
 
+func on_parried() -> void:
+	open_to_riposte()
+	_go(State.STAGGER)
+	sprite.modulate = Color.WHITE
+	sprite.play("idle", 0.0)
+	_stagger_time = 1.4
+
 func on_stagger() -> void:
 	_go(State.STAGGER)
+	_stagger_time = 0.6
 	sprite.modulate = Color.WHITE
 	sprite.play("idle", 0.0)
 	Fx.float_text(get_parent(), global_position + Vector2(0, -50), "Brisé !", Color(1, 0.8, 0.3))

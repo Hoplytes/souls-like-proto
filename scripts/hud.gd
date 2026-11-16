@@ -16,9 +16,11 @@ const HELP := [
 	"Espace : roulade (invincible)",
 	"J / clic gauche : attaque légère (combo x3)",
 	"K / clic droit : attaque lourde",
+	"L ou Maj (maintenir) : bouclier",
+	"  lever le bouclier au moment du coup = parade",
 	"R : boire une fiole    Tab : changer d'arme",
 	"E : se reposer au feu    H : afficher l'aide",
-	"Manette : A/B/X/Y, LB fiole, RB/RT attaques",
+	"Manette : A/B/X/Y, LB bouclier, LT fiole, RB/RT attaques",
 ]
 
 func _ready() -> void:
