@@ -25,6 +25,11 @@
    "name": "hurt",
    "frames": 6,
    "rows": 1
+  },
+  {
+   "name": "jump",
+   "frames": 5,
+   "rows": 4
   }
  ]
 }

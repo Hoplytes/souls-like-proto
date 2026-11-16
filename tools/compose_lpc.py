@@ -10,7 +10,7 @@ from PIL import Image
 SRC = sys.argv[1]
 OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'sprites')
 CELL = 128
-ANIMS = [("idle", 2, 4), ("walk", 9, 4), ("slash", 6, 4), ("thrust", 8, 4), ("hurt", 6, 1)]
+ANIMS = [("idle", 2, 4), ("walk", 9, 4), ("slash", 6, 4), ("thrust", 8, 4), ("hurt", 6, 1), ("jump", 5, 4)]
 COLS = max(a[1] for a in ANIMS)
 
 # Weapon attack sheets that are drawn on 128 px cells (others are 64 px).

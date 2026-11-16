@@ -42,6 +42,23 @@ func _run() -> void:
 	await _wait(0.12)
 	await _shot("04_roll")
 	await _wait(1.0)
+	# Roll sideways and downwards in a clear spot, capturing the tumble.
+	var back := p.global_position
+	p.global_position = Vector2(250, 1250)
+	await _wait(0.6)
+	for dir in ["move_right", "move_down"]:
+		var start := p.global_position
+		Input.action_press(dir)
+		await _press("roll", 0.05)
+		for i in 5:
+			await _wait(0.08)
+			await _shot("roll_%s_%d" % [dir, i])
+		Input.action_release(dir)
+		await _wait(0.4)
+		log_lines.append("roll %s distance %.0f" % [dir, p.global_position.distance_to(start)])
+		await _wait(0.6)
+	p.global_position = back
+	await _wait(0.3)
 	await _press("switch_weapon")
 	await _press("attack_heavy")
 	await _wait(0.4)

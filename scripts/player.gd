@@ -8,8 +8,8 @@ signal stats_changed
 enum State { FREE, ROLL, ATTACK, HEAL, STAGGER, DEAD }
 
 const SPEED := 95.0
-const ROLL_TIME := 0.42
-const ROLL_IFRAMES := Vector2(0.03, 0.32)
+const ROLL_TIME := 0.48
+const ROLL_IFRAMES := Vector2(0.03, 0.36)
 const ROLL_COST := 22.0
 const STAMINA_REGEN := 55.0
 const STAMINA_DELAY := 0.5
@@ -30,6 +30,7 @@ var _buffer := ""
 var _buffer_t := 0.0
 var _roll_dir := Vector2.ZERO
 var _ghost_t := 0.0
+var _landed := false
 var _atk: Dictionary
 var _atk_kind := ""
 var _atk_phase := 0
@@ -43,6 +44,7 @@ func _ready() -> void:
 	collision_layer = 2
 	collision_mask = 1 | 4
 	setup_body(_layers_for(weapon), 8)
+	sprite.pivot = 22.0  # rotate around the body's centre, for the roll
 	sprite.play("idle", 2.0)
 
 func _layers_for(w: String) -> Array:
@@ -107,7 +109,7 @@ func _spend(cost: float) -> bool:
 func _to_free() -> void:
 	state = State.FREE
 	_t = 0.0
-	sprite.scale = Vector2.ONE
+	_reset_sprite()
 
 # --- free movement -------------------------------------------------------
 
@@ -154,26 +156,59 @@ func _start_action(action: String, input: Vector2) -> bool:
 func _start_roll(input: Vector2) -> void:
 	state = State.ROLL
 	_t = 0.0
+	_ghost_t = 0.08
+	_landed = false
 	_roll_dir = input.normalized() if input != Vector2.ZERO else facing
 	facing = _roll_dir
 	sprite.set_dir(LpcSprite.dir_from_vector(_roll_dir))
-	sprite.play("walk", 26.0, true, true)
+	sprite.play("jump", 0.0, false, true)
+	sprite.set_frame(1)
+	Fx.dust(get_parent(), global_position, -_roll_dir)
 
+## The roll: crouch, a full tumble while tucked, then a crouched landing.
+## Sideways it spins; up or down it squashes like a forward roll.
 func _roll(delta: float) -> void:
 	var k := _t / ROLL_TIME
-	velocity = _roll_dir * lerpf(270.0, 70.0, k)
-	sprite.scale = Vector2(1.0 + 0.12 * sin(k * PI), 1.0 - 0.18 * sin(k * PI))
-	_ghost_t -= delta
-	if _ghost_t <= 0.0:
-		_ghost_t = 0.05
-		_spawn_ghost()
+	velocity = _roll_dir * lerpf(300.0, 90.0, k * k)  # ~110 px
+	var tumble := clampf((k - 0.12) / 0.68, 0.0, 1.0)  # 0..1 during the tucked part
+	var sideways := absf(_roll_dir.x) > absf(_roll_dir.y)
+	if k < 0.12:
+		sprite.set_frame(1)
+		sprite.scale = Vector2(1.1, 0.85)
+	elif k < 0.8:
+		sprite.set_frame(3 if fmod(tumble * 4.0, 2.0) < 1.0 else 2)
+		sprite.position.y = -sprite.pivot + 9.0  # tucked frames are drawn mid-air: bring them to the ground
+		if sideways:
+			sprite.rotation = signf(_roll_dir.x) * tumble * TAU
+			sprite.scale = Vector2(0.9, 0.9)
+		else:
+			var c := cos(tumble * TAU * 2.0)  # two quick flips read as a forward roll
+			sprite.scale = Vector2(1.05, 0.5 + 0.45 * absf(c))
+			sprite.position.x = sin(tumble * TAU) * 2.0
+	else:
+		_reset_sprite()
+		sprite.set_frame(1 if k < 0.92 else 0)
+		sprite.scale = Vector2(1.08, 0.9) if k < 0.92 else Vector2.ONE
+		if not _landed:
+			_landed = true
+			Fx.dust(get_parent(), global_position, _roll_dir * 0.5)
+	if k < 0.8:
+		_ghost_t -= delta
+		if _ghost_t <= 0.0:
+			_spawn_ghost()
+			_ghost_t = 0.07
 	if _t >= ROLL_TIME:
 		_to_free()
+
+func _reset_sprite() -> void:
+	sprite.scale = Vector2.ONE
+	sprite.rotation = 0.0
+	sprite.position = Vector2(0, -sprite.pivot)
 
 func _spawn_ghost() -> void:
 	var g := sprite.duplicate()
 	g.set_process(false)
-	g.modulate = Color(0.6, 0.75, 1.0, 0.5)
+	g.modulate = Color(0.35, 0.45, 0.85, 0.35)
 	g.global_position = sprite.global_position
 	g.z_index = -1
 	get_parent().add_child(g)
@@ -291,13 +326,13 @@ func on_stagger() -> void:
 	state = State.STAGGER
 	_t = 0.0
 	sprite.modulate = Color.WHITE
-	sprite.scale = Vector2.ONE
+	_reset_sprite()
 	sprite.play("idle", 0.0)
 
 func die() -> void:
 	state = State.DEAD
 	sprite.modulate = Color.WHITE
-	sprite.scale = Vector2.ONE
+	_reset_sprite()
 	super.die()
 
 func rest() -> void:

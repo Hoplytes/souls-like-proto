@@ -9,13 +9,14 @@ signal finished(anim: String)
 const CELL := 128
 const FEET := Vector2(64, 94)  # where the feet sit inside a cell
 const COLS := 9
-const ROWS := 17
+const ROWS := 21
 const ANIMS := {
 	"idle": {"row": 0, "frames": 2, "dirs": 4},
 	"walk": {"row": 4, "frames": 9, "dirs": 4},
 	"slash": {"row": 8, "frames": 6, "dirs": 4},
 	"thrust": {"row": 12, "frames": 8, "dirs": 4},
 	"hurt": {"row": 16, "frames": 6, "dirs": 1},
+	"jump": {"row": 17, "frames": 5, "dirs": 4},  # used for the roll
 }
 enum Dir { UP, LEFT, DOWN, RIGHT }
 
@@ -28,6 +29,13 @@ var _t := 0.0
 var _frame := 0
 var _done := false
 var _layers: Array[Sprite2D] = []
+## Height above the feet that rotation and scaling pivot around.
+var pivot := 0.0:
+	set(v):
+		pivot = v
+		position.y = -v
+		for s in _layers:
+			s.offset = -FEET + Vector2(0, v)
 
 func set_layers(paths: Array) -> void:
 	for s in _layers:
@@ -39,7 +47,7 @@ func set_layers(paths: Array) -> void:
 		var s := Sprite2D.new()
 		s.texture = load(p)
 		s.centered = false
-		s.offset = -FEET
+		s.offset = -FEET + Vector2(0, pivot)
 		s.hframes = COLS
 		s.vframes = ROWS
 		add_child(s)

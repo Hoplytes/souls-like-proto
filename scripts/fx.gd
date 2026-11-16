@@ -56,6 +56,13 @@ static func zone(parent: Node, pos: Vector2, rot: float, shape: String, size: Ve
 	f.z_index = -1  # on the ground, under the characters
 	return f
 
+## Little dust puffs kicked up at the start and end of a roll.
+static func dust(parent: Node, pos: Vector2, push: Vector2) -> void:
+	var f := _make(parent, pos, "dust", Color(0.65, 0.6, 0.5, 0.7), 0.35)
+	f.z_index = -1
+	for i in 5:
+		f.seed_dirs.append(push * randf_range(4, 12) + Vector2(randf_range(-7, 7), randf_range(-3, 2)))
+
 static func float_text(parent: Node, pos: Vector2, text: String, col: Color) -> void:
 	var l := Label.new()
 	l.text = text
@@ -109,6 +116,9 @@ func _draw() -> void:
 		"spark":
 			for d in seed_dirs:
 				draw_line(d * t * 0.6, d * (0.4 + t), c, 1.5)
+		"dust":
+			for d in seed_dirs:
+				draw_circle(d * (0.4 + t), 2.5 * (1.0 - t) + 1.0, c)
 		"ring":
 			draw_arc(Vector2.ZERO, lerpf(r0, r1, t), 0, TAU, 40, c, width)
 		"arc":
