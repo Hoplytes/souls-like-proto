@@ -4,7 +4,10 @@ import csv, os, sys
 USED = ["body/bodies/male/", "body/bodies/muscular/", "body/bodies/skeleton/", "head/heads/human/male/",
         "head/heads/orc/male/", "hair/plain/adult/", "torso/armour/plate/male/",
         "legs/armour/plate/male/", "feet/armour/plate/male/", "arms/armour/plate/male/",
-        "weapon/sword/arming/", "weapon/polearm/spear/"]
+        "weapon/sword/arming/", "weapon/polearm/spear/",
+        "torso/armour/legion/male/", "hat/helmet/legion/adult/", "hat/accessory/crest/adult/",
+        "legs/skirts/legion/male/", "shoulders/legion/male/", "cape/solid/", "feet/sandals/male/",
+        "shield/spartan/", "arms/bracers/male/"]
 groups = {}
 for row in csv.DictReader(open(sys.argv[1], encoding="utf-8")):
     fn = row["filename"].strip()
@@ -15,7 +18,7 @@ for row in csv.DictReader(open(sys.argv[1], encoding="utf-8")):
 out = ["# Credits: Liberated Pixel Cup (LPC) art", "",
        "Character, armour and weapon sprites come from the",
        "[Universal LPC Spritesheet Character Generator](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator).",
-       "They were combined into sheets by `tools/compose_lpc.py` (the orc body was recoloured).",
+       "They were combined into sheets by `tools/compose_lpc.py` (the orc body and the Spartan armour, cape and crest were recoloured).",
        "Each piece may be used under any one of the licences listed for it.", ""]
 for (authors, licenses, urls, notes), parts in sorted(groups.items(), key=lambda kv: sorted(kv[1])[0]):
     out += [f"## {', '.join(sorted(parts))}", "", f"- Authors: {authors}", f"- Licences: {licenses}"]

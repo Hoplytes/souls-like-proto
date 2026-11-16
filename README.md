@@ -7,7 +7,7 @@ Prototype de combat souls-like en vue de dessus, en pixel art, fait avec **Godot
 
 ## Contenu du prototype
 
-- Un chevalier en armure de plaques, deux armes : **épée longue** (rapide, arc large) et **lance** (longue portée, attaque lourde en fente).
+- Un **hoplite spartiate** (casque à crête, cuirasse de bronze, cape rouge, bouclier rond), deux armes : **lance** (longue portée, attaque lourde en fente) et **épée courte** (rapide, arc large).
 - **Roulade** avec frames d'invincibilité, **endurance**, attaques **légères** (combo x3) et **lourdes** (super-armure pendant le coup).
 - **Fioles** de soin (3) et un **feu de camp** : se reposer remet la santé et les fioles, et fait revenir les ennemis.
 - 4 **squelettes** qui annoncent leurs attaques et laissent une fenêtre de punition.

@@ -1,6 +1,6 @@
 class_name Player
 extends Actor
-## The player knight: movement, roll with invincibility frames, stamina,
+## The player, a Spartan hoplite: movement, roll with invincibility frames, stamina,
 ## light/heavy attacks with combos, healing flasks and weapon swap.
 
 signal stats_changed
@@ -21,7 +21,7 @@ var max_stamina := 100.0
 var stamina := 100.0
 var flasks := 3
 var max_flasks := 3
-var weapon := "sword"
+var weapon := "spear"
 var state := State.FREE
 var facing := Vector2.DOWN
 var _stamina_wait := 0.0
@@ -49,7 +49,7 @@ func _ready() -> void:
 
 func _layers_for(w: String) -> Array:
 	var l: Array = Weapons.DATA[w].layers
-	return [l[0], "res://assets/sprites/knight.png", l[1]]
+	return ["res://assets/sprites/spartan_back.png", l[0], "res://assets/sprites/spartan.png", l[1]]
 
 func _physics_process(delta: float) -> void:
 	queue_redraw()

@@ -5,7 +5,7 @@ class_name Weapons
 
 const DATA := {
 	"sword": {
-		"name": "Épée longue",
+		"name": "Épée courte",
 		"anim": "slash",
 		"frames": [3, 5],  # frames 0-2 windup, 3-4 active, 5 recovery
 		"layers": ["res://assets/sprites/sword_bg.png", "res://assets/sprites/sword_fg.png"],

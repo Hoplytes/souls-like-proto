@@ -2,7 +2,7 @@
 
 Character, armour and weapon sprites come from the
 [Universal LPC Spritesheet Character Generator](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator).
-They were combined into sheets by `tools/compose_lpc.py` (the orc body was recoloured).
+They were combined into sheets by `tools/compose_lpc.py` (the orc body and the Spartan armour, cape and crest were recoloured).
 Each piece may be used under any one of the licences listed for it.
 
 ## arms/armour/plate/male/
@@ -11,6 +11,13 @@ Each piece may be used under any one of the licences listed for it.
 - Licences: OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0
 - Notes: original by wulax, recolors by bigbeargames; adapted to v3 bases and further recolors by bluecarrot16, climb/emote/jump by JaidynReiman
 - Sources: https://opengameart.org/content/lpc-medieval-fantasy-character-sprites, http://opengameart.org/content/lpc-clothing-updates
+
+## arms/bracers/male/
+
+- Authors: Matthew Krohn (makrohn),Johannes Sjölund (wulax),JaidynReiman
+- Licences: OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0
+- Notes: original by wulax, adjustments by Makrohn, climb/emote/jump/sit/run by JaidynReiman
+- Sources: https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
 
 ## body/bodies/male/
 
@@ -32,6 +39,18 @@ Each piece may be used under any one of the licences listed for it.
 - Licences: OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0
 - Sources: https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles, https://opengameart.org/content/lpc-medieval-fantasy-character-sprites, https://opengameart.org/content/lpc-skeleton, https://opengameart.org/content/lpc-character-bases
 
+## cape/solid/
+
+- Authors: bluecarrot16,JaidynReiman
+- Licences: OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0
+- Sources: https://opengameart.org/content/lpc-curly-hair-elven-ears-white-cape-with-blue-trim-and-more, https://opengameart.org/content/lpc-roman-armor, http://opengameart.org/content/lpc-clothing-updates
+
+## cape/solid/
+
+- Authors: Nila122,JaidynReiman
+- Licences: OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0
+- Sources: https://opengameart.org/content/lpc-curly-hair-elven-ears-white-cape-with-blue-trim-and-more, https://opengameart.org/content/lpc-roman-armor
+
 ## feet/armour/plate/male/
 
 - Authors: Matthew Krohn (makrohn),Johannes Sjölund (wulax)
@@ -39,11 +58,30 @@ Each piece may be used under any one of the licences listed for it.
 - Notes: original by wulax, recolors by bigbeargames, edits for v3 base and recolors by bluecarrot16
 - Sources: https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
 
+## feet/sandals/male/
+
+- Authors: Nila122,JaidynReiman,Matthew Krohn (makrohn),Johannes Sjölund (wulax)
+- Licences: OGA-BY 3.0,CC-BY-SA 3.0,GPL 2.0,GPL 3.0
+- Notes: edited for v3 bases by bluecarrot16, Jump/Sit/Emote/Run/Revised Combat by JaidynReiman
+- Sources: https://opengameart.org/content/lpc-roman-armor, http://opengameart.org/content/lpc-clothing-updates, https://opengameart.org/content/lpc-expanded-socks-shoes
+
 ## hair/plain/adult/
 
 - Authors: JaidynReiman,Manuel Riecke (MrBeast),Joe White
 - Licences: OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0
 - Sources: https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles, https://opengameart.org/content/ponytail-and-plain-hairstyles, https://opengameart.org/content/lpc-expanded-hair
+
+## hat/accessory/crest/adult/
+
+- Authors: bluecarrot16
+- Licences: OGA-BY 3.0
+- Sources: https://opengameart.org/content/lpc-helmets, https://opengameart.org/content/lpc-expanded-hats-facial-helmets
+
+## hat/helmet/legion/adult/
+
+- Authors: bluecarrot16,Nila122,JaidynReiman,Matthew Krohn (makrohn),Johannes Sjölund (wulax)
+- Licences: OGA-BY 3.0,CC-BY-SA 3.0,GPL 2.0,GPL 3.0
+- Sources: https://opengameart.org/content/lpc-roman-armor, https://opengameart.org/content/lpc-expanded-hats-facial-helmets
 
 ## head/heads/human/male/
 
@@ -65,6 +103,32 @@ Each piece may be used under any one of the licences listed for it.
 - Licences: OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0
 - Notes: reduced to 7 colors an adapted to v3 bases by bluecarrot16, climb/jump/sit/emote/run by JaidynReiman
 - Sources: https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
+
+## legs/skirts/legion/male/
+
+- Authors: bluecarrot16,Nila122,JaidynReiman
+- Licences: OGA-BY 3.0,CC-BY-SA 3.0,GPL 2.0,GPL 3.0
+- Notes: original by Nila122 to legion, adapted to v3 bases by bluecarrot16, climb/jump/sit/run by JaidynReiman
+- Sources: https://opengameart.org/content/lpc-roman-armor, http://opengameart.org/content/lpc-clothing-updates, https://opengameart.org/content/lpc-expanded-armour
+
+## shield/spartan/
+
+- Authors: bluecarrot16,Sander Frenken (castelonia)
+- Licences: OGA-BY 3.0
+- Sources: https://opengameart.org/content/lpc-shields
+
+## shoulders/legion/male/
+
+- Authors: Nila122
+- Licences: OGA-BY 3.0,CC-BY-SA 3.0,GPL 2.0,GPL 3.0
+- Sources: https://opengameart.org/content/lpc-roman-armor
+
+## torso/armour/legion/male/
+
+- Authors: Napsio (Vitruvian Studio),JaidynReiman,bluecarrot16,Nila122
+- Licences: OGA-BY 3.0,CC-BY-SA 3.0,GPL 2.0,GPL 3.0
+- Notes: adapted to v3 bases by bluecarrot16, jump/run/sit/combat and teen by JaidynReiman, color reduction to 6 colors inspired by Napsio (Vitruvian Studio)
+- Sources: https://opengameart.org/content/lpc-roman-armor
 
 ## torso/armour/plate/male/
 

@@ -27,12 +27,16 @@ def layer_path(spec, anim):
         return (w, "first") if w else None
     return None
 
-def tint(im, hue):
-    """Shift every visible pixel to the given hue (0-255), keeping light and shade."""
+def tint(im, hue, sat=None, val=0.8):
+    """Recolour every visible pixel to the given hue (0-255), keeping light and shade.
+    sat: target saturation (None keeps a light boost of the original), val: brightness factor."""
     h, s, v = im.convert("RGB").convert("HSV").split()
     h = h.point(lambda _: hue)
-    s = s.point(lambda x: min(255, int(x * 0.9) + 25))
-    v = v.point(lambda x: int(x * 0.8))
+    if sat is None:
+        s = s.point(lambda x: min(255, int(x * 0.9) + 25))
+    else:
+        s = s.point(lambda x: sat)
+    v = v.point(lambda x: min(255, int(x * val)))
     out = Image.merge("HSV", (h, s, v)).convert("RGBA")
     out.putalpha(im.getchannel("A"))
     return out
@@ -51,7 +55,7 @@ def compose(name, layers):
                 p = p[0]
             im = Image.open(os.path.join(SRC, p)).convert("RGBA")
             if isinstance(spec, tuple):
-                im = tint(im, spec[1])
+                im = tint(im, *spec[1:])
             src_cell = 128 if im.height >= nrows * 128 else 64
             off = (CELL - src_cell) // 2
             for r in range(min(nrows, im.height // src_cell)):
@@ -91,7 +95,19 @@ KNIGHT = ["body/bodies/male", "head/heads/human/male", "head/faces/male/neutral"
           "legs/armour/plate/male", "feet/armour/plate/male", "torso/armour/plate/male",
           "arms/armour/plate/male", "hair/plain/adult"]
 
+BRONZE = (21, 125, 1.1)
+RED = (250, 175, 0.85)
+LEATHER = (16, 95, 0.75)
+SPARTAN = ["body/bodies/male", "head/heads/human/male", "head/faces/male/neutral",
+           "feet/sandals/male", ("legs/armour/plate/male",) + BRONZE, ("legs/skirts/legion/male",) + LEATHER,
+           ("torso/armour/legion/male",) + BRONZE, lambda a: f"shoulders/legion/male/{a}/bronze.png",
+           "arms/bracers/male", ("cape/solid/fg",) + RED, lambda a: f"shield/spartan/fg/{a}/spartan.png",
+           ("hat/helmet/legion/adult",) + BRONZE, ("hat/accessory/crest/adult",) + RED]
+SPARTAN_BACK = [lambda a: f"shield/spartan/bg/{a}/spartan.png", ("cape/solid/bg",) + RED]
+
 compose("knight", KNIGHT)
+compose("spartan", SPARTAN)
+compose("spartan_back", SPARTAN_BACK)
 compose("sword_bg", [sword("bg")])
 compose("sword_fg", [sword("fg")])
 compose("spear_bg", [spear("background")])
