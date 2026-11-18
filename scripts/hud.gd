@@ -60,6 +60,7 @@ func _draw() -> void:
 		var c := Color(1, 0.6, 0.2) if i < player.flasks else Color(0.25, 0.22, 0.2)
 		draw_rect(Rect2(p + Vector2(-1, -9), Vector2(3, 3)), Color(0.5, 0.4, 0.3))
 		draw_circle(p, 3.5, c)
+	_text(Vector2(vw - 70, vh - 6), "version " + BuildInfo.VERSION, 7, Color(0.7, 0.7, 0.7, 0.6))
 	_text(Vector2(10, vh - 10), "Arme : " + Weapons.DATA[player.weapon].name + "   [Tab]", 8, Color(0.85, 0.8, 0.65))
 	if show_boss and boss:
 		var w := 360.0
