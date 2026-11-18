@@ -28,6 +28,7 @@ Prototype de combat souls-like en vue de dessus, en pixel art, fait avec **Godot
 | Se reposer au feu | E | A |
 | Aide | H | Start |
 | Couper / remettre le son | M | |
+| Sons enregistrés ↔ sons de synthèse | N | |
 
 ## Organisation du code
 
@@ -52,9 +53,13 @@ de bord et d'angle de l'herbe ; `scripts/prop.gd` place les éléments de décor
 
 ## Sons
 
-Tous les bruitages sont **synthétisés** par `tools/make_sfx.py` (aucun enregistrement, aucune licence à gérer) :
-coups, impacts, bouclier et parade, roulade, pas, cris du boss, ambiance de vent. Pour les modifier, changer le
-script puis relancer `python3 tools/make_sfx.py`.
+Deux jeux de sons, comparables en jeu avec la touche **N** :
+- **enregistrés** (par défaut) : sons réels de l'*Oculus Audio Pack 01* (CC BY 4.0) et du pack *Impact Sounds* de
+  Kenney (CC0), dans `assets/sfx_cc0/` ; crédits dans [CREDITS-AUDIO.md](CREDITS-AUDIO.md) ;
+- **synthèse** : tous les sons générés par `tools/make_sfx.py` (`assets/sfx/`), sans licence à gérer.
+
+Les sons sans enregistrement (soin, feu de camp, saut et charge du boss…) utilisent la synthèse dans les deux cas.
+La correspondance entre événements du jeu et fichiers est dans `scripts/sfx.gd`.
 
 ## Régénérer les sprites
 

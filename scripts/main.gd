@@ -67,7 +67,7 @@ func _ready() -> void:
 	add_child(cm)
 
 	_add_leaves(cam)
-	Sfx.loop(self, "wind_loop", -14.0)
+	Sfx.start_ambience(self)
 
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -257,6 +257,8 @@ func _physics_process(delta: float) -> void:
 		_close_gate()
 	if Input.is_action_just_pressed("help"):
 		hud.show_help = not hud.show_help
+	if Input.is_action_just_pressed("sound_set"):
+		Fx.float_text(world, player.global_position + Vector2(0, -60), Sfx.toggle_set(self), Color(0.8, 0.9, 1))
 	if Input.is_action_just_pressed("mute"):
 		AudioServer.set_bus_mute(0, not AudioServer.is_bus_mute(0))
 
@@ -270,6 +272,7 @@ func _close_gate() -> void:
 	_wall(Rect2(ARENA_C + Vector2(-60, ARENA_R), Vector2(120, 30)))
 	Fx.shake(6)
 	Sfx.play(self, "rocks_fall", null, 0.0, 0.0)
+	Sfx.play(self, "rocks", null, 0.0)
 	boss.activate()
 	hud.show_boss = true
 	hud.flash_message(Boss.BOSS_NAME, Color(0.9, 0.8, 0.6))
@@ -306,6 +309,7 @@ func _setup_inputs() -> void:
 		"interact": [[KEY_E], ["btn", JOY_BUTTON_A]],
 		"help": [[KEY_H], ["btn", JOY_BUTTON_START]],
 		"mute": [[KEY_M]],
+		"sound_set": [[KEY_N]],
 	}
 	for action in map:
 		if InputMap.has_action(action):

@@ -76,6 +76,7 @@ func _physics_process(delta: float) -> void:
 				var c := global_position + Vector2(0, -26)
 				Hitbox.spawn(get_parent(), self, c + facing * 52, facing.angle(), "rect", Vector2(96, 26), 24, 40, 8, 0.2)
 				Sfx.play(self, "swing_heavy", global_position, 2.0)
+				Sfx.play(self, "boss_effort", global_position, 0.0)
 				Fx.shake(3)
 		State.THRUST:
 			velocity = facing * 300.0 * (1.0 - _t / 0.25)
@@ -95,6 +96,7 @@ func _physics_process(delta: float) -> void:
 				sprite.position.y = 0
 				collision_mask = 1
 				Sfx.play(self, "boss_leap", global_position)
+				Sfx.play(self, "boss_effort", global_position, 0.0)
 				var radius := 52.0 if phase == 1 else 64.0
 				Fx.zone(get_parent(), _leap_to, 0, "circle", Vector2(radius, 0), 0.65)
 		State.LEAP_AIR:
@@ -205,6 +207,8 @@ func _go(s: State) -> void:
 
 func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 	var hit := super.take_hit(dmg, poise_dmg, from)
+	if hit and not dead and randf() < 0.35:
+		Sfx.play(self, "boss_hurt", global_position, -2.0)
 	if hit and phase == 1 and hp <= max_hp / 2 and not dead:
 		phase = 2
 		sprite.modulate = base_modulate()

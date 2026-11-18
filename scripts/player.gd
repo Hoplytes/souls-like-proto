@@ -149,7 +149,7 @@ func _free(input: Vector2) -> void:
 		_step_t -= get_physics_process_delta_time()
 		if _step_t <= 0.0:
 			_step_t = 0.3
-			Sfx.play(self, "step_%d" % (randi() % 3), null, -10.0, 0.15)
+			Sfx.play(self, "step", null, -8.0, 0.1)
 	else:
 		sprite.play("idle", 2.0)
 
@@ -318,6 +318,8 @@ func _spawn_hitbox() -> void:
 	var pos := center + facing * float(_atk.reach)
 	var swing := "swing_heavy" if _atk_kind == "heavy" else ("thrust" if weapon == "spear" else "swing_light")
 	Sfx.play(self, swing, null, -3.0)
+	if _atk_kind == "heavy":
+		Sfx.play(self, "player_effort", null, -4.0)
 	Hitbox.spawn(get_parent(), self, pos, facing.angle(), _atk.shape, _atk.size,
 		_atk.damage, _atk.poise, 16, _atk.active + 0.02)
 	if _atk.shape == "circle":
