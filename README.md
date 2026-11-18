@@ -12,6 +12,7 @@ Prototype de combat souls-like en vue de dessus, en pixel art, fait avec **Godot
 - **Bouclier** : maintenir pour bloquer les coups de face (coûte de l'endurance ; à court d'endurance, la garde est brisée). Le lever **au moment de l'impact** déclenche une **parade** : aucun coût, l'ennemi est déséquilibré et le coup suivant fait une **riposte** à double dégâts. Le saut écrasant et l'onde de choc du boss ne se bloquent pas : il faut rouler.
 - **Fioles** de soin (3) et un **feu de camp** : se reposer remet la santé et les fioles, et fait revenir les ennemis.
 - 4 **hoplites morts-vivants** (squelettes en armure rouillée, casque corinthien, bouclier rond) : deux à l'épée, deux à la lance qui frappent de plus loin. Ils annoncent leurs attaques et laissent une fenêtre de punition.
+- L'arène du boss : les **ruines d'un temple grec** (colonnade de marbre brisée, colonnes tombées, dallage avec frise en méandre, braseros).
 - Le boss **Astérion, le Minotaure**, armé d'une hache de guerre : grand coup de hache en arc, saut écrasant et charge, tous annoncés par une zone rouge. En dessous de 50 % de vie, il entre en rage (attaques plus rapides, double estoc, onde de choc). Une charge dans un mur l'étourdit.
 
 ## Commandes

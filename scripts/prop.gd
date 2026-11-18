@@ -12,6 +12,8 @@ const SOLID := {  # collision size at the base; missing = walk-through
 	"rock_wide": Vector2(52, 14), "rock_flat": Vector2(50, 10), "rock_low": Vector2(52, 10),
 	"rock_mid": Vector2(26, 10), "rock_small": Vector2(22, 8), "pillar": Vector2(26, 10),
 	"pillar_broken": Vector2(26, 10), "pillar_dark": Vector2(26, 10), "pillar_dark_broken": Vector2(26, 10),
+	"marble_column": Vector2(26, 10), "marble_stump": Vector2(26, 10), "marble_stump_tall": Vector2(26, 10),
+	"marble_fallen": Vector2(88, 12), "marble_drum": Vector2(28, 10),
 }
 const SWAY := ["grass_tall_a", "grass_tall_b", "grass_short_a", "grass_short_b", "fern"]
 
@@ -65,7 +67,7 @@ func _draw() -> void:
 	var w := 0.0
 	if kind.begins_with("tree_"):
 		w = 20.0
-	elif kind.begins_with("rock") or kind.begins_with("pillar") or kind == "stump":
+	elif kind.begins_with("rock") or kind.begins_with("pillar") or kind.begins_with("marble") or kind == "stump":
 		w = sprite.texture.get_width() * 0.45
 	if w > 0.0:
 		draw_set_transform(Vector2(2, 0), 0, Vector2(1, 0.35))

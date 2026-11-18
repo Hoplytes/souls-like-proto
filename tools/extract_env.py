@@ -29,6 +29,9 @@ PROPS = {
     "pillar_broken": ("Structure/Pillars/Stone Pillar A.png", (96, 46, 128, 96)),
     "pillar_dark": ("Structure/Pillars/Stone Pillar A.png", (192, 0, 224, 96)),
     "pillar_dark_broken": ("Structure/Pillars/Stone Pillar A.png", (192, 58, 224, 96)),
+    "marble_column": ("Structure/Pillars/Stone Pillar A.png", (0, 0, 32, 96)),
+    "marble_stump": ("Structure/Pillars/Stone Pillar A.png", (0, 50, 32, 96)),
+    "marble_stump_tall": ("Structure/Pillars/Stone Pillar A.png", (0, 30, 32, 96)),
     "grass_tall_a": ("Terrain/plants_autumn.png", (355, 0, 380, 53)),
     "grass_tall_b": ("Terrain/plants_autumn.png", (386, 0, 413, 53)),
     "grass_short_a": ("Terrain/plants_autumn.png", (263, 23, 285, 51)),
@@ -48,6 +51,18 @@ for name, (sheet, box) in PROPS.items():
     bb = im.getchannel("A").getbbox()
     im = im.crop(bb) if bb else im
     im.save(os.path.join(OUT, name + ".png"), optimize=True)
+
+# A fallen column: the shaft of a marble column lying on its side, and a drum.
+col = Image.open(os.path.join(SRC, "Structure/Pillars/Stone Pillar A.png")).convert("RGBA").crop((0, 0, 32, 96))
+col.rotate(90, expand=True).save(os.path.join(OUT, "marble_fallen.png"), optimize=True)
+col.crop((0, 30, 32, 62)).rotate(90, expand=True).save(os.path.join(OUT, "marble_drum.png"), optimize=True)
+# Light marble slabs for the arena floor (Tile B, beige).
+tb = Image.open(os.path.join(SRC, "Structure/Floor/Tile B.png")).convert("RGBA")
+light, warm = tb.crop((0, 0, 32, 32)), tb.crop((0, 32, 32, 64))
+marble = Image.new("RGBA", (64, 64))
+for (x, y), t in {(0, 0): light, (32, 0): warm, (0, 32): warm, (32, 32): light}.items():
+    marble.paste(t, (x, y))
+marble.save(os.path.join(OUT, "arena_marble.png"))
 
 # Whole tile sheets used by the ground tile map.
 shutil.copy(os.path.join(SRC, "Terrain/terrain_autumn.png"), os.path.join(OUT, "terrain_autumn.png"))

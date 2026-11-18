@@ -20,7 +20,7 @@ var _slabs: Texture2D
 func _ready() -> void:
 	z_index = -10
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-	_slabs = load("res://assets/env/arena_slabs.png")
+	_slabs = load("res://assets/env/arena_marble.png")
 	_cols = int(ceil(world_rect.size.x / CELL))
 	_rows = int(ceil(world_rect.size.y / CELL))
 	var ts := TileSet.new()
@@ -123,3 +123,39 @@ func _draw_arena(node: Node2D) -> void:
 		pts.append(p)
 		uvs.append(p / 64.0)
 	node.draw_colored_polygon(pts, Color.WHITE, uvs, _slabs)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	# Cracks, stains and moss: the temple has been abandoned for centuries.
+	for i in 40:
+		var p := arena_center + Vector2.RIGHT.rotated(rng.randf() * TAU) * sqrt(rng.randf()) * (arena_radius - 24)
+		var crack := PackedVector2Array([p])
+		for j in rng.randi_range(2, 5):
+			crack.append(crack[-1] + Vector2(rng.randf_range(-9, 9), rng.randf_range(-6, 6)))
+		node.draw_polyline(crack, Color(0.35, 0.3, 0.27, 0.7), 1.0)
+	for i in 26:
+		var a := rng.randf() * TAU
+		var p := arena_center + Vector2.RIGHT.rotated(a) * rng.randf_range(arena_radius - 40, arena_radius - 20)
+		node.draw_circle(p, rng.randf_range(4, 10), Color(0.32, 0.38, 0.22, 0.45))
+	# Central altar circle.
+	node.draw_arc(arena_center, 44, 0, TAU, 48, Color(0.5, 0.42, 0.36), 6)
+	node.draw_arc(arena_center, 36, 0, TAU, 48, Color(0.66, 0.58, 0.5), 2)
+	_draw_meander(node, arena_center, 44, Color(0.36, 0.28, 0.24), 0.5)
+	# Greek key (meander) frieze along the rim.
+	node.draw_arc(arena_center, arena_radius - 11, 0, TAU, 96, Color(0.3, 0.25, 0.22), 16)
+	_draw_meander(node, arena_center, arena_radius - 11, Color(0.86, 0.8, 0.68), 1.0)
+
+## One ring of the Greek key pattern: a square spiral repeated along a circle.
+func _draw_meander(node: Node2D, center: Vector2, radius: float, col: Color, scale: float) -> void:
+	var unit := 12.0 * scale
+	var count := int(TAU * radius / unit)
+	var glyph := [Vector2(0, 5), Vector2(0, -5), Vector2(9, -5), Vector2(9, 2), Vector2(4, 2), Vector2(4, -1), Vector2(6, -1)]
+	for i in count:
+		var a := i * TAU / count
+		var n := Vector2.RIGHT.rotated(a)  # outward
+		var t := n.orthogonal()
+		var base := center + n * radius
+		var pts := PackedVector2Array()
+		for g in glyph:
+			pts.append(base + t * (g.x - 6.0) * scale - n * g.y * scale)
+		node.draw_polyline(pts, col, maxf(1.0, 1.5 * scale))
+		node.draw_line(base + t * -6.0 * scale - n * 5.0 * scale, base + t * 6.0 * scale - n * 5.0 * scale, col, maxf(1.0, 1.5 * scale))

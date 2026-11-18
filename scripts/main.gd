@@ -123,33 +123,18 @@ func _build_level() -> void:
 		_tree(forest, Vector2(x + 18, WORLD.end.y - 6 + rng.randf_range(-8, 4)), rng)
 		x += rng.randf_range(30, 44)
 
-	# Arena: an invisible ring wall dressed with boulders and old pillars,
-	# open to the south.
+	# Arena: an invisible ring wall, dressed as a ruined Greek temple
+	# (see _build_temple), open to the south.
 	for i in 40:
 		var a := i * TAU / 40
 		if absf(wrapf(a - PI / 2, -PI, PI)) < 0.22:
 			continue
 		var p := ARENA_C + Vector2.RIGHT.rotated(a) * (ARENA_R + 12)
 		_wall(Rect2(p - Vector2(20, 20), Vector2(40, 40)), false)
-	for i in 26:
-		var a := i * TAU / 26 + 0.12
-		if absf(wrapf(a - PI / 2, -PI, PI)) < 0.32:
-			continue
-		var p := ARENA_C + Vector2.RIGHT.rotated(a) * (ARENA_R + rng.randf_range(10, 24))
-		# Tall boulders at the back, low ones at the front so they never hide the fight.
-		var k: String = ["rock_big", "rock_wide", "rock_big"][rng.randi() % 3] if sin(a) < 0.3 else ["rock_low", "rock_flat"][rng.randi() % 2]
-		Prop.make(world, k, p, rng.randf() < 0.5)
-	for a in [-PI * 0.8, -PI * 0.6, -PI * 0.4, -PI * 0.2, PI * 0.08, PI * 0.92]:
-		var k := "pillar_broken" if a > 0 or a == -PI * 0.6 else "pillar"
-		Prop.make(world, k, ARENA_C + Vector2.RIGHT.rotated(a) * (ARENA_R - 22))
-	for i in 10:
-		var p := ARENA_C + Vector2.RIGHT.rotated(rng.randf() * TAU) * rng.randf_range(30, ARENA_R - 50)
-		Prop.make(world, ["pebble", "rock_small", "mushroom_b"][rng.randi() % 3], p)
+	_build_temple(rng)
 	# Ruins along the path, guarded by the skeletons.
 	for p in [Vector2(530, 1170), Vector2(680, 1020), Vector2(520, 880), Vector2(690, 660), Vector2(510, 650), Vector2(680, 880)]:
 		Prop.make(world, ["pillar", "pillar_broken", "pillar_dark_broken"][rng.randi() % 3], p)
-	Prop.make(world, "pillar", Vector2(560, 590))
-	Prop.make(world, "pillar", Vector2(640, 590))
 	# Countryside: dead and autumn trees, rocks, tall grass.
 	var keep_out := func(p: Vector2) -> bool:
 		if p.distance_to(ARENA_C) < ARENA_R + 50 or p.distance_to(START) < 80:
@@ -190,6 +175,39 @@ func _build_level() -> void:
 	# Stones around the bonfire.
 	for i in 7:
 		Prop.make(world, "pebble", bonfire.position + Vector2.RIGHT.rotated(i * TAU / 7) * 18 + Vector2(0, 4))
+
+## The boss arena: a ring of marble columns, standing at the back and
+## broken at the front so they never hide the fight, fallen columns and
+## drums, rubble and four burning braziers.
+func _build_temple(rng: RandomNumberGenerator) -> void:
+	var n := 18
+	for i in n:
+		var a := i * TAU / n + PI / 2  # i = 0 is the gate, due south
+		if i == 0:
+			continue
+		var p := ARENA_C + Vector2.RIGHT.rotated(a) * (ARENA_R + 8)
+		var front := sin(a) > 0.35
+		var k := "marble_column"
+		if i == 1 or i == n - 1:
+			k = "marble_column"  # the two columns framing the gate
+		elif front:
+			k = ["marble_stump", "marble_stump", "marble_drum"][rng.randi() % 3]
+		elif rng.randf() < 0.3:
+			k = "marble_stump_tall"
+		Prop.make(world, k, p, rng.randf() < 0.5)
+		if front and rng.randf() < 0.6:
+			Prop.make(world, "pebble", p + Vector2(rng.randf_range(-14, 14), rng.randf_range(4, 12)))
+	# Fallen columns and drums, inside along the edge and outside the ring.
+	for spot in [[-2.3, ARENA_R - 30], [-0.55, ARENA_R - 34], [2.55, ARENA_R + 46], [0.35, ARENA_R + 50], [-1.2, ARENA_R + 52]]:
+		Prop.make(world, "marble_fallen", ARENA_C + Vector2.RIGHT.rotated(spot[0]) * spot[1], rng.randf() < 0.5)
+	for i in 6:
+		var p := ARENA_C + Vector2.RIGHT.rotated(rng.randf() * TAU) * rng.randf_range(ARENA_R - 50, ARENA_R - 20)
+		if sin((p - ARENA_C).angle()) < 0.6:
+			Prop.make(world, ["marble_drum", "pebble", "rock_small"][rng.randi() % 3], p, rng.randf() < 0.5)
+	for a in [PI * 0.25, PI * 0.75, PI * 1.25, PI * 1.75]:
+		var b := Brazier.new()
+		b.position = ARENA_C + Vector2.RIGHT.rotated(a) * (ARENA_R - 34)
+		world.add_child(b)
 
 func _tree(kinds: Array, p: Vector2, rng: RandomNumberGenerator) -> void:
 	Prop.make(world, kinds[rng.randi() % kinds.size()], p, rng.randf() < 0.5)
@@ -269,9 +287,9 @@ func _physics_process(delta: float) -> void:
 
 func _close_gate() -> void:
 	_gate_closed = true
-	# Boulders fall to block the way out.
-	for dx in [-34, 0, 34]:
-		var r := Prop.make(world, "rock_wide" if dx == 0 else "rock_low", ARENA_C + Vector2(dx, ARENA_R + 16), dx > 0)
+	# The gate collapses: a column falls across the way out.
+	for spot in [[Vector2(0, ARENA_R + 14), "marble_fallen"], [Vector2(-40, ARENA_R + 22), "marble_drum"], [Vector2(38, ARENA_R + 24), "rock_low"]]:
+		var r := Prop.make(world, spot[1], ARENA_C + spot[0])
 		r.collision_layer = 1
 		Fx.dust(world, r.position, Vector2.UP)
 	_wall(Rect2(ARENA_C + Vector2(-60, ARENA_R), Vector2(120, 30)))

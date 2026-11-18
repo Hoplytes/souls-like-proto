@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bx8di3kvloxwf"
-path="res://.godot/imported/arena_slabs.png-5de6f6f26a761c253985cd3c955f5688.ctex"
+uid="uid://dga8n6cjdhv6t"
+path="res://.godot/imported/marble_stump.png-fc8553b90e5a565027a8ba57271c4143.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/env/arena_slabs.png"
-dest_files=["res://.godot/imported/arena_slabs.png-5de6f6f26a761c253985cd3c955f5688.ctex"]
+source_file="res://assets/env/marble_stump.png"
+dest_files=["res://.godot/imported/marble_stump.png-fc8553b90e5a565027a8ba57271c4143.ctex"]
 
 [params]
 
