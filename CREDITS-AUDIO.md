@@ -71,3 +71,11 @@ By Kenney (https://kenney.nl/assets/impact-sounds), public domain (CC0). No attr
 | `wood_light_1.ogg` | impact_wood_light_000.ogg |
 | `wood_light_2.ogg` | impact_wood_light_001.ogg |
 | `wood_light_3.ogg` | impact_wood_light_002.ogg |
+## Music (CC0 1.0)
+
+| File in `assets/music/` | Track | Author | Source |
+|---|---|---|---|
+| `boss_phase1.ogg` | Battle Theme A | cynicmusic | https://opengameart.org/content/battle-theme-a (CC0) |
+| `boss_phase2.ogg` | Boss Battle #8 [Metal] (loop) | nene | https://opengameart.org/content/boss-battle-8-metal (CC0) |
+
+Both are public domain (CC0); credited anyway.

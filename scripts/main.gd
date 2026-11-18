@@ -18,6 +18,7 @@ var _gate: StaticBody2D
 var _gate_closed := false
 var _ended := false
 var _skeletons: Array = []
+var music: Music
 
 func _ready() -> void:
 	_setup_inputs()
@@ -61,6 +62,7 @@ func _ready() -> void:
 	boss.player = player
 	world.add_child(boss)
 	boss.died.connect(_on_boss_died)
+	boss.phase_changed.connect(func(_p): music.play("boss_phase2", 2.5))
 
 	var cm := CanvasModulate.new()
 	cm.color = Color(0.74, 0.7, 0.82)  # dusk
@@ -68,6 +70,8 @@ func _ready() -> void:
 
 	_add_leaves(cam)
 	Sfx.start_ambience(self)
+	music = Music.new()
+	add_child(music)
 
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -274,6 +278,7 @@ func _close_gate() -> void:
 	Sfx.play(self, "rocks_fall", null, 0.0, 0.0)
 	Sfx.play(self, "rocks", null, 0.0)
 	boss.activate()
+	music.play("boss_phase1", 1.0)
 	hud.show_boss = true
 	hud.flash_message(Boss.BOSS_NAME, Color(0.9, 0.8, 0.6))
 	get_tree().create_timer(2.0).timeout.connect(func(): if not _ended: hud.message = "")
@@ -281,6 +286,7 @@ func _close_gate() -> void:
 func _on_player_died() -> void:
 	_ended = true
 	hud.flash_message("VOUS ÊTES MORT", Color(0.75, 0.08, 0.06))
+	music.stop(1.0)
 	Sfx.play(self, "you_died", null, -2.0, 0.0)
 	get_tree().create_timer(3.5).timeout.connect(get_tree().reload_current_scene)
 
@@ -288,6 +294,7 @@ func _on_boss_died() -> void:
 	_ended = true
 	Fx.hitstop(get_tree(), 0.25)
 	hud.show_boss = false
+	music.stop(2.5)
 	get_tree().create_timer(1.2).timeout.connect(func(): Sfx.play(self, "victory", null, -2.0, 0.0))
 	hud.flash_message("ENNEMI ABATTU", Color(0.95, 0.8, 0.35), "Merci d'avoir testé le prototype ! (rechargement dans 6 s)")
 	get_tree().create_timer(6.0).timeout.connect(get_tree().reload_current_scene)

@@ -84,6 +84,49 @@ func _shield_test(p: Player) -> void:
 	Input.action_release("block")
 	await _wait(0.6)
 
+## Enemies must never pin the player: walk away from skeletons pressed
+## against (or overlapping) the player and check that the player gets away.
+func _stick_test(p: Player) -> void:
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e is SkeletonEnemy:
+			e.queue_free()
+	await _wait(0.1)
+	for case in [["adjacent", Vector2(0, -16)], ["overlapping", Vector2(2, -3)], ["two around", Vector2(-14, -8)],
+			["side", Vector2(-16, 0)], ["side+attacks", Vector2(-16, 0)], ["blocking", Vector2(0, -16)]]:
+		p.global_position = Vector2(600, 1200)
+		p.rest()
+		var group: Array = []
+		var offsets: Array = [case[1]] if case[0] != "two around" else [Vector2(-14, -8), Vector2(14, -8)]
+		for o in offsets:
+			var sk := SkeletonEnemy.new()
+			sk.player = p
+			sk.position = p.global_position + o
+			main.world.add_child(sk)
+			if case[0] != "side+attacks" and case[0] != "blocking":
+				sk._cooldown = 99.0  # chase only, never attack
+			sk.state = SkeletonEnemy.State.CHASE
+			group.append(sk)
+		await _wait(0.4)
+		var start := p.global_position
+		var dir := "move_right" if case[0].begins_with("side") else "move_down"
+		if case[0] == "blocking":
+			Input.action_press("block")
+		Input.action_press(dir)
+		await _wait(1.0)
+		Input.action_release(dir)
+		Input.action_release("block")
+		log_lines.append("stick %s: player moved %.0f px, hp %d, nearest skeleton %.0f px" % [case[0], p.global_position.distance_to(start), p.hp, group[0].global_position.distance_to(p.global_position)])
+		for sk in group:
+			sk.queue_free()
+		await _wait(0.1)
+
+func _music_state() -> String:
+	var out := []
+	for pl in main.music._players:
+		if pl.playing:
+			out.append("%s at %.0f dB" % [pl.stream.resource_name, pl.volume_db])
+	return ", ".join(out) if out else "silent"
+
 func _run() -> void:
 	var p: Player = main.player
 	await _wait(1.0)
@@ -125,6 +168,7 @@ func _run() -> void:
 	await _shot("05_spear_heavy")
 	log_lines.append("player hp %d stamina %d" % [p.hp, int(p.stamina)])
 	await _shield_test(p)
+	await _stick_test(p)
 	# Teleport to the arena entrance and wake the boss.
 	p.invulnerable = true
 	p.global_position = main.ARENA_C + Vector2(0, 150)
@@ -134,6 +178,7 @@ func _run() -> void:
 	Input.action_release("move_up")
 	await _wait(0.8)
 	await _shot("06_boss_intro")
+	log_lines.append("music after boss intro: " + _music_state())
 	await _wait(1.2)
 	await _shot("07_boss_attack")
 	await _wait(0.6)
@@ -145,6 +190,7 @@ func _run() -> void:
 	await _wait(1.5)
 	await _shot("10_phase2_attack")
 	log_lines.append("boss hp %d phase %d" % [main.boss.hp, main.boss.phase])
+	log_lines.append("music in phase 2: " + _music_state())
 	var f := FileAccess.open(out.path_join("log.txt"), FileAccess.WRITE)
 	f.store_string("\n".join(log_lines))
 	get_tree().quit()

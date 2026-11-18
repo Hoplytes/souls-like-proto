@@ -61,6 +61,9 @@ Deux jeux de sons, comparables en jeu avec la touche **N** :
 Les sons sans enregistrement (soin, feu de camp, saut et charge du boss…) utilisent la synthèse dans les deux cas.
 La correspondance entre événements du jeu et fichiers est dans `scripts/sfx.gd`.
 
+**Musique du boss** (`scripts/music.gd`) : *Battle Theme A* de cynicmusic pendant la première phase, puis
+*Boss Battle #8 [Metal]* de nene quand Gorvak entre en rage (deux morceaux CC0).
+
 ## Régénérer les sprites
 
 Les planches de `assets/sprites/` sont produites à partir du dépôt

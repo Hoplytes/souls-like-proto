@@ -21,6 +21,11 @@ var hit_sound := "hit_flesh"
 var shadow_size := Vector2(12, 5)
 
 func setup_body(layers: Array, hurt_layer: int, radius: float = 7.0) -> void:
+	# Top-down game: no floor. In the default "grounded" mode, a body touching
+	# another one from above treats it as a moving platform and rides along
+	# with it, which made skeletons stick to the player.
+	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
+	wall_min_slide_angle = 0.0
 	hp = max_hp
 	poise = max_poise
 	var cs := CollisionShape2D.new()
