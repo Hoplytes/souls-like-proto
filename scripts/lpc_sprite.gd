@@ -6,8 +6,8 @@ extends Node2D
 
 signal finished(anim: String)
 
-const CELL := 128
-const FEET := Vector2(64, 94)  # where the feet sit inside a cell
+## Cell size of the sheets: 128 px, or 192 px for big weapon swings.
+var cell := 128
 const COLS := 9
 const ROWS := 21
 const ANIMS := {
@@ -35,7 +35,7 @@ var pivot := 0.0:
 		pivot = v
 		position.y = -v
 		for s in _layers:
-			s.offset = -FEET + Vector2(0, v)
+			s.offset = -feet() + Vector2(0, v)
 
 func set_layers(paths: Array) -> void:
 	for s in _layers:
@@ -47,12 +47,16 @@ func set_layers(paths: Array) -> void:
 		var s := Sprite2D.new()
 		s.texture = load(p)
 		s.centered = false
-		s.offset = -FEET + Vector2(0, pivot)
+		s.offset = -feet() + Vector2(0, pivot)
 		s.hframes = COLS
 		s.vframes = ROWS
 		add_child(s)
 		_layers.append(s)
 	_apply()
+
+## Where the feet sit inside a cell (the 64 px body is centred in it).
+func feet() -> Vector2:
+	return Vector2(cell / 2.0, cell / 2.0 + 30.0)
 
 func set_layer_visible(index: int, v: bool) -> void:
 	if index < _layers.size():

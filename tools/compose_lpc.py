@@ -1,6 +1,6 @@
 """Assemble LPC layers into Godot-ready sprite sheets.
 
-Every sheet uses 128x128 cells. Rows: for each animation in ANIMS, one row per
+Sheets use 128x128 cells (192x192 for big weapons such as the boss's axe). Rows: for each animation in ANIMS, one row per
 direction (up, left, down, right), except 'hurt' which has a single row.
 Run:  python3 tools/compose_lpc.py <path-to-LPC-repo>/spritesheets
 """
@@ -41,7 +41,7 @@ def tint(im, hue, sat=None, val=0.8):
     out.putalpha(im.getchannel("A"))
     return out
 
-def compose(name, layers):
+def compose(name, layers, CELL=CELL):
     rows = sum(a[2] for a in ANIMS)
     sheet = Image.new("RGBA", (COLS * CELL, rows * CELL), (0, 0, 0, 0))
     row0 = 0
@@ -56,7 +56,8 @@ def compose(name, layers):
             im = Image.open(os.path.join(SRC, p)).convert("RGBA")
             if isinstance(spec, tuple):
                 im = tint(im, *spec[1:])
-            src_cell = 128 if im.height >= nrows * 128 else 64
+            # Source frames are 64 px, or 128/192 px for oversized weapon swings.
+            src_cell = im.height // nrows if im.height >= nrows * 64 else 64
             off = (CELL - src_cell) // 2
             for r in range(min(nrows, im.height // src_cell)):
                 for f in range(frames):
@@ -65,7 +66,10 @@ def compose(name, layers):
                     sf = 0 if first_only else f
                     tile = im.crop((sf * src_cell, r * src_cell, (sf + 1) * src_cell, (r + 1) * src_cell))
                     dst = Image.new("RGBA", (CELL, CELL))
-                    dst.paste(tile, (off, off))
+                    if off >= 0:
+                        dst.paste(tile, (off, off))
+                    else:  # bigger than the cell: keep its centre
+                        dst.paste(tile.crop((-off, -off, -off + CELL, -off + CELL)), (0, 0))
                     cell = sheet.crop((f * CELL, (row0 + r) * CELL, (f + 1) * CELL, (row0 + r + 1) * CELL))
                     cell = Image.alpha_composite(cell, dst)
                     sheet.paste(cell, (f * CELL, (row0 + r) * CELL))
@@ -102,12 +106,35 @@ SPARTAN = ["body/bodies/male", "head/heads/human/male", "head/faces/male/neutral
            "feet/sandals/male", ("legs/armour/plate/male",) + BRONZE, ("legs/skirts/legion/male",) + LEATHER,
            ("torso/armour/legion/male",) + BRONZE, lambda a: f"shoulders/legion/male/{a}/bronze.png",
            "arms/bracers/male", ("cape/solid/fg",) + RED,
-           ("hat/helmet/legion/adult",) + BRONZE, ("hat/accessory/crest/adult",) + RED]
+           ("hat/helmet/barbuta/male",) + BRONZE, ("hat/accessory/crest/adult",) + RED]
 SPARTAN_BACK = [("cape/solid/bg",) + RED]
 
-compose("knight", KNIGHT)
 compose("spartan", SPARTAN)
 compose("spartan_back", SPARTAN_BACK)
+# --- Undead hoplites: skeletons in rusted armour and Corinthian-style helmets.
+RUST = (16, 105, 0.85)
+GRIME = (18, 70, 0.6)
+BONE = (24, 40, 0.92)
+HOPLITE_UNDEAD = [("body/bodies/skeleton",) + BONE, ("head/heads/skeleton/adult",) + BONE,
+                  ("legs/skirts/legion/male",) + GRIME, ("torso/armour/legion/male",) + RUST,
+                  ("hat/helmet/barbuta/male",) + RUST]
+compose("skeleton_hoplite", HOPLITE_UNDEAD)
+compose("round_shield", [lambda a: f"shield/round/{a}/black.png"])
+
+# --- The Minotaur boss: dark fur, rusted bronze, tattered cape, war axe (192 px cells).
+FUR = (12, 120, 0.55)
+DARK_RED = (250, 160, 0.5)
+MINOTAUR = [("body/bodies/muscular",) + FUR, "head/heads/minotaur/male",
+            ("legs/skirts/legion/male",) + GRIME, lambda a: f"shoulders/legion/male/{a}/bronze.png",
+            ("arms/bracers/male",) + GRIME, ("cape/tattered/fg",) + DARK_RED]
+compose("minotaur_back", [("cape/tattered/bg",) + DARK_RED], CELL=192)
+compose("minotaur", MINOTAUR, CELL=192)
+def waraxe(part):  # part: '' (front) or 'behind/'
+    return lambda a: (f"weapon/blunt/waraxe/attack_slash/{part}waraxe.png" if a == "slash"
+                      else f"weapon/blunt/waraxe/{part}{a}/waraxe.png")
+compose("waraxe_bg", [waraxe("behind/")], CELL=192)
+compose("waraxe_fg", [waraxe("")], CELL=192)
+
 # The shield is its own layer so it can be hidden when it is raised to block.
 compose("aspis_bg", [lambda a: f"shield/spartan/bg/{a}/spartan.png"])
 compose("aspis_fg", [lambda a: f"shield/spartan/fg/{a}/spartan.png"])
@@ -125,8 +152,6 @@ compose("sword_bg", [sword("bg")])
 compose("sword_fg", [sword("fg")])
 compose("spear_bg", [spear("background")])
 compose("spear_fg", [spear("foreground")])
-compose("skeleton", ["body/bodies/skeleton"])
-compose("orc", [("body/bodies/muscular", ORC_HUE), "head/heads/orc/male"])
 
 json.dump({"cell": CELL, "anims": [{"name": a, "frames": f, "rows": r} for a, f, r in ANIMS]},
           open(os.path.join(OUT, "layout.json"), "w"), indent=1)

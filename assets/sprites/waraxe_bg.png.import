@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cxqmgse7gg2n"
-path="res://.godot/imported/orc.png-7912b6622febc3ddee3db1dcad97c7f4.ctex"
+uid="uid://mtnuj58x40gt"
+path="res://.godot/imported/waraxe_bg.png-cce29916b8a8d6a718f9b42399053ff7.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/orc.png"
-dest_files=["res://.godot/imported/orc.png-7912b6622febc3ddee3db1dcad97c7f4.ctex"]
+source_file="res://assets/sprites/waraxe_bg.png"
+dest_files=["res://.godot/imported/waraxe_bg.png-cce29916b8a8d6a718f9b42399053ff7.ctex"]
 
 [params]
 

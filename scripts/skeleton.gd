@@ -1,17 +1,19 @@
 class_name SkeletonEnemy
 extends Actor
-## Basic enemy: wanders, chases the player, telegraphs a sword slash,
-## then leaves a recovery window to punish.
+## Undead hoplite: a skeleton in rusted armour with a round shield. It
+## wanders, chases the player, telegraphs its attack, then leaves a recovery
+## window to punish. Two kinds: "sword" (wide slash) and "spear" (long
+## thrust from further away).
 
 enum State { IDLE, CHASE, WINDUP, ATTACK, RECOVER, STAGGER, DEAD }
 
 const SPEED := 52.0
 const AGGRO := 150.0
-const RANGE := 34.0
 const WINDUP := 0.5
 const RECOVER := 0.7
 
 var player: Player
+var kind := "sword"
 var state := State.IDLE
 var home := Vector2.ZERO
 var facing := Vector2.DOWN
@@ -27,7 +29,9 @@ func _ready() -> void:
 	collision_mask = 1 | 2 | 4
 	add_to_group("enemies")
 	hit_sound = "hit_bone"
-	setup_body(["res://assets/sprites/sword_bg.png", "res://assets/sprites/skeleton.png", "res://assets/sprites/sword_fg.png"], 16)
+	var w := "spear" if kind == "spear" else "sword"
+	setup_body(["res://assets/sprites/%s_bg.png" % w, "res://assets/sprites/skeleton_hoplite.png",
+		"res://assets/sprites/round_shield.png", "res://assets/sprites/%s_fg.png" % w], 16)
 	home = global_position
 	sprite.play("idle", 2.0)
 
@@ -57,33 +61,39 @@ func _physics_process(delta: float) -> void:
 		State.CHASE:
 			if not player_ok or dist > AGGRO * 1.8:
 				_go(State.IDLE)
-			elif dist < RANGE and _cooldown <= 0.0:
+			elif dist < _range() and _cooldown <= 0.0:
 				facing = to_p.normalized()
 				_go(State.WINDUP)
 				sprite.set_dir(LpcSprite.dir_from_vector(facing))
-				sprite.play("slash", 0.0, false, true)
+				sprite.play(_anim(), 0.0, false, true)
 			else:
 				_move(to_p.normalized() * SPEED)
 		State.WINDUP:
 			velocity = Vector2.ZERO
 			var k := _t / WINDUP
-			sprite.set_frame(int(k * 3.0))
+			sprite.set_frame(int(k * (4.0 if kind == "spear" else 3.0)))
 			sprite.modulate = Color.WHITE.lerp(Color(2.0, 0.6, 0.6), k)
 			if _t >= WINDUP:
 				_go(State.ATTACK)
 				sprite.modulate = Color.WHITE
 				var c := global_position + Vector2(0, -18)
-				Hitbox.spawn(get_parent(), self, c + facing * 20, 0, "circle", Vector2(26, 0), 18, 1, 8, 0.12)
-				Fx.slash_arc(get_parent(), c, facing.angle(), 34, Color(1, 0.5, 0.4))
+				if kind == "spear":
+					Hitbox.spawn(get_parent(), self, c + facing * 36, facing.angle(), "rect", Vector2(56, 14), 16, 1, 8, 0.12)
+				else:
+					Hitbox.spawn(get_parent(), self, c + facing * 20, 0, "circle", Vector2(26, 0), 18, 1, 8, 0.12)
+					Fx.slash_arc(get_parent(), c, facing.angle(), 34, Color(1, 0.5, 0.4))
 				Sfx.play(self, "skeleton_swing", global_position)
 		State.ATTACK:
 			velocity = facing * 90.0
-			sprite.set_frame(3 + int(_t / 0.12 * 2))
+			if kind == "spear":
+				sprite.set_frame(4 + int(_t / 0.12 * 2))
+			else:
+				sprite.set_frame(3 + int(_t / 0.12 * 2))
 			if _t >= 0.12:
 				_go(State.RECOVER)
 		State.RECOVER:
 			velocity = Vector2.ZERO
-			sprite.set_frame(5)
+			sprite.set_frame(7 if kind == "spear" else 5)
 			if _t >= RECOVER:
 				_cooldown = randf_range(0.3, 1.0)
 				_go(State.CHASE)
@@ -93,6 +103,12 @@ func _physics_process(delta: float) -> void:
 				_go(State.CHASE)
 	velocity += apply_knockback(delta)
 	move_and_slide()
+
+func _range() -> float:
+	return 52.0 if kind == "spear" else 34.0
+
+func _anim() -> String:
+	return "thrust" if kind == "spear" else "slash"
 
 func _go(s: State) -> void:
 	state = s

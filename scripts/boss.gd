@@ -1,8 +1,8 @@
 class_name Boss
 extends Actor
-## Gorvak, the warden of the ruins. Three telegraphed attacks:
-## spear thrust, leap slam and charge. Phase 2 (below half health) is faster
-## and adds follow-ups.
+## Asterion, the Minotaur. Three telegraphed attacks: a wide war-axe
+## cleave (the THRUST states), a leap slam and a charge. Phase 2 (below half
+## health) is faster and adds follow-ups.
 
 signal phase_changed(phase: int)
 
@@ -10,7 +10,9 @@ enum State { DORMANT, CHASE, THRUST_WINDUP, THRUST, LEAP_WINDUP, LEAP_AIR, CHARG
 
 const SCALE := 1.6
 const SPEED := 48.0
-const BOSS_NAME := "Gorvak, Geôlier des Ruines"
+const BOSS_NAME := "Astérion, le Minotaure"
+const CLEAVE_REACH := 40.0
+const CLEAVE_RADIUS := 46.0
 
 var player: Player
 var state := State.DORMANT
@@ -33,7 +35,8 @@ func _ready() -> void:
 	collision_mask = 1 | 2
 	add_to_group("enemies")
 	hit_sound = "hit_heavy"
-	setup_body(["res://assets/sprites/spear_bg.png", "res://assets/sprites/orc.png", "res://assets/sprites/spear_fg.png"], 16, 11.0)
+	setup_body(["res://assets/sprites/minotaur_back.png", "res://assets/sprites/waraxe_bg.png",
+		"res://assets/sprites/minotaur.png", "res://assets/sprites/waraxe_fg.png"], 16, 11.0, 192)
 	sprite.scale = Vector2.ONE * SCALE
 	sprite.modulate = base_modulate()
 	sprite.play("idle", 1.5)
@@ -70,17 +73,18 @@ func _physics_process(delta: float) -> void:
 				_walk(to_p.normalized() * SPEED)
 		State.THRUST_WINDUP:
 			velocity = Vector2.ZERO
-			sprite.set_frame(int(clampf(_t / (0.65 * m), 0, 0.99) * 4))
+			sprite.set_frame(int(clampf(_t / (0.65 * m), 0, 0.99) * 3))
 			if _t >= 0.65 * m:
 				_go(State.THRUST)
 				var c := global_position + Vector2(0, -26)
-				Hitbox.spawn(get_parent(), self, c + facing * 52, facing.angle(), "rect", Vector2(96, 26), 24, 40, 8, 0.2)
+				Hitbox.spawn(get_parent(), self, c + facing * CLEAVE_REACH, 0, "circle", Vector2(CLEAVE_RADIUS, 0), 26, 45, 8, 0.18)
+				Fx.slash_arc(get_parent(), c, facing.angle(), CLEAVE_REACH + 26, Color(1, 0.6, 0.35), 0.2)
 				Sfx.play(self, "swing_heavy", global_position, 2.0)
 				Sfx.play(self, "boss_effort", global_position, 0.0)
 				Fx.shake(3)
 		State.THRUST:
-			velocity = facing * 300.0 * (1.0 - _t / 0.25)
-			sprite.set_frame(4 + int(_t / 0.25 * 3.99))
+			velocity = facing * 220.0 * (1.0 - _t / 0.25)
+			sprite.set_frame(3 + int(_t / 0.25 * 2.99))
 			if _t >= 0.25:
 				if _follow_up:
 					_follow_up = false
@@ -103,6 +107,7 @@ func _physics_process(delta: float) -> void:
 			var k := _t / 0.65
 			global_position = _leap_from.lerp(_leap_to, k)
 			sprite.position.y = -70.0 * sin(k * PI)
+			sprite.set_frame(1 if k < 0.5 else (2 if k < 0.85 else 4))
 			velocity = Vector2.ZERO
 			if k >= 1.0:
 				sprite.position.y = 0
@@ -166,7 +171,7 @@ func _choose_attack(to_p: Vector2, dist: float) -> void:
 			_start_thrust()
 		"leap":
 			_go(State.LEAP_WINDUP)
-			sprite.play("thrust", 0.0, false, true)
+			sprite.play("slash", 0.0, false, true)
 			_leap_from = global_position
 			_leap_to = global_position + to_p.limit_length(170.0)
 		"charge":
@@ -177,8 +182,8 @@ func _start_thrust() -> void:
 	facing = (player.global_position - global_position).normalized()
 	sprite.set_dir(LpcSprite.dir_from_vector(facing))
 	_go(State.THRUST_WINDUP)
-	sprite.play("thrust", 0.0, false, true)
-	Fx.zone(get_parent(), global_position + Vector2(0, -10), facing.angle(), "rect", Vector2(110, 26), 0.65 * _speed_mult())
+	sprite.play("slash", 0.0, false, true)
+	Fx.zone(get_parent(), global_position + facing * CLEAVE_REACH, 0, "circle", Vector2(CLEAVE_RADIUS, 0), 0.65 * _speed_mult())
 
 func _shockwave(radius: float) -> void:
 	var t := get_tree().create_timer(0.3, false)
@@ -213,7 +218,7 @@ func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 		phase = 2
 		sprite.modulate = base_modulate()
 		Fx.ring(get_parent(), global_position, 10, 120, Color(1, 0.2, 0.2), 0.6, 4)
-		Fx.float_text(get_parent(), global_position + Vector2(0, -100), "Gorvak entre en rage !", Color(1, 0.3, 0.3))
+		Fx.float_text(get_parent(), global_position + Vector2(0, -100), "Astérion entre en rage !", Color(1, 0.3, 0.3))
 		Fx.shake(8)
 		Sfx.play(self, "boss_rage", global_position, 3.0, 0.0)
 		phase_changed.emit(2)

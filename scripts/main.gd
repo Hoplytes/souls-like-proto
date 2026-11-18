@@ -1,6 +1,6 @@
 extends Node2D
 ## Builds the prototype level: a ruined path guarded by skeletons, a
-## bonfire checkpoint and the arena of Gorvak.
+## bonfire checkpoint and the arena of Asterion the Minotaur.
 
 const WORLD := Rect2(0, 0, 1200, 1500)
 const ARENA_C := Vector2(600, 330)
@@ -237,9 +237,10 @@ func _spawn_skeletons() -> void:
 		if is_instance_valid(s):
 			s.queue_free()
 	_skeletons.clear()
-	for p in SKELETONS:
+	for i in SKELETONS.size():
 		var s := SkeletonEnemy.new()
-		s.position = p
+		s.kind = "spear" if i % 2 == 1 else "sword"
+		s.position = SKELETONS[i]
 		s.player = player
 		world.add_child(s)
 		_skeletons.append(s)

@@ -20,7 +20,7 @@ var body_height := 40.0
 var hit_sound := "hit_flesh"
 var shadow_size := Vector2(12, 5)
 
-func setup_body(layers: Array, hurt_layer: int, radius: float = 7.0) -> void:
+func setup_body(layers: Array, hurt_layer: int, radius: float = 7.0, cell: int = 128) -> void:
 	# Top-down game: no floor. In the default "grounded" mode, a body touching
 	# another one from above treats it as a moving platform and rides along
 	# with it, which made skeletons stick to the player.
@@ -34,6 +34,7 @@ func setup_body(layers: Array, hurt_layer: int, radius: float = 7.0) -> void:
 	cs.shape = c
 	add_child(cs)
 	sprite = LpcSprite.new()
+	sprite.cell = cell
 	add_child(sprite)
 	sprite.set_layers(layers)
 	hurtbox = Area2D.new()
