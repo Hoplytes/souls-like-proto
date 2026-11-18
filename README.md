@@ -27,6 +27,7 @@ Prototype de combat souls-like en vue de dessus, en pixel art, fait avec **Godot
 | Changer d'arme | Tab | Select |
 | Se reposer au feu | E | A |
 | Aide | H | Start |
+| Couper / remettre le son | M | |
 
 ## Organisation du code
 
@@ -48,6 +49,12 @@ Prototype de combat souls-like en vue de dessus, en pixel art, fait avec **Godot
 Le sol (herbe dorée d'automne, chemins pavés), les arbres, rochers, plantes et piliers viennent de
 [LPC Revised](https://github.com/ElizaWy/LPC). `scripts/ground.gd` choisit automatiquement les tuiles
 de bord et d'angle de l'herbe ; `scripts/prop.gd` place les éléments de décor.
+
+## Sons
+
+Tous les bruitages sont **synthétisés** par `tools/make_sfx.py` (aucun enregistrement, aucune licence à gérer) :
+coups, impacts, bouclier et parade, roulade, pas, cris du boss, ambiance de vent. Pour les modifier, changer le
+script puis relancer `python3 tools/make_sfx.py`.
 
 ## Régénérer les sprites
 

@@ -54,6 +54,10 @@ func set_layers(paths: Array) -> void:
 		_layers.append(s)
 	_apply()
 
+func set_layer_visible(index: int, v: bool) -> void:
+	if index < _layers.size():
+		_layers[index].visible = v
+
 func play(name: String, speed: float = 8.0, looping: bool = true, restart: bool = false) -> void:
 	if name == anim and not restart and not _done:
 		fps = speed

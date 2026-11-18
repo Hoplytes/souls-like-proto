@@ -67,6 +67,7 @@ func _ready() -> void:
 	add_child(cm)
 
 	_add_leaves(cam)
+	Sfx.loop(self, "wind_loop", -14.0)
 
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -248,6 +249,7 @@ func _physics_process(delta: float) -> void:
 	if near_fire and Input.is_action_just_pressed("interact"):
 		player.rest()
 		_spawn_skeletons()
+		Sfx.play(self, "bonfire", null, -2.0, 0.0)
 		Fx.ring(world, bonfire.global_position, 4, 60, Color(1, 0.7, 0.3), 0.6)
 		hud.flash_message("Feu allumé", Color(1, 0.75, 0.35), "Santé et fioles restaurées. Les ennemis sont revenus.")
 		get_tree().create_timer(2.0).timeout.connect(func(): if not _ended: hud.message = "")
@@ -255,6 +257,8 @@ func _physics_process(delta: float) -> void:
 		_close_gate()
 	if Input.is_action_just_pressed("help"):
 		hud.show_help = not hud.show_help
+	if Input.is_action_just_pressed("mute"):
+		AudioServer.set_bus_mute(0, not AudioServer.is_bus_mute(0))
 
 func _close_gate() -> void:
 	_gate_closed = true
@@ -265,6 +269,7 @@ func _close_gate() -> void:
 		Fx.dust(world, r.position, Vector2.UP)
 	_wall(Rect2(ARENA_C + Vector2(-60, ARENA_R), Vector2(120, 30)))
 	Fx.shake(6)
+	Sfx.play(self, "rocks_fall", null, 0.0, 0.0)
 	boss.activate()
 	hud.show_boss = true
 	hud.flash_message(Boss.BOSS_NAME, Color(0.9, 0.8, 0.6))
@@ -273,12 +278,14 @@ func _close_gate() -> void:
 func _on_player_died() -> void:
 	_ended = true
 	hud.flash_message("VOUS ÊTES MORT", Color(0.75, 0.08, 0.06))
+	Sfx.play(self, "you_died", null, -2.0, 0.0)
 	get_tree().create_timer(3.5).timeout.connect(get_tree().reload_current_scene)
 
 func _on_boss_died() -> void:
 	_ended = true
 	Fx.hitstop(get_tree(), 0.25)
 	hud.show_boss = false
+	get_tree().create_timer(1.2).timeout.connect(func(): Sfx.play(self, "victory", null, -2.0, 0.0))
 	hud.flash_message("ENNEMI ABATTU", Color(0.95, 0.8, 0.35), "Merci d'avoir testé le prototype ! (rechargement dans 6 s)")
 	get_tree().create_timer(6.0).timeout.connect(get_tree().reload_current_scene)
 
@@ -298,6 +305,7 @@ func _setup_inputs() -> void:
 		"switch_weapon": [[KEY_TAB], ["btn", JOY_BUTTON_BACK]],
 		"interact": [[KEY_E], ["btn", JOY_BUTTON_A]],
 		"help": [[KEY_H], ["btn", JOY_BUTTON_START]],
+		"mute": [[KEY_M]],
 	}
 	for action in map:
 		if InputMap.has_action(action):

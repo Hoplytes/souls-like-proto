@@ -42,8 +42,10 @@ var _combo := 0
 var _healed := false
 var _hit_iframes := 0.0
 var _stagger_time := 0.35
-var _guard: Node2D
+var _shield: Sprite2D  # the shield raised in front of the body while blocking
 var _guard_flash := 0.0
+var _guard_jolt := 0.0
+var _step_t := 0.0
 
 func _ready() -> void:
 	max_hp = 120
@@ -53,14 +55,16 @@ func _ready() -> void:
 	setup_body(_layers_for(weapon), 8)
 	sprite.pivot = 22.0  # rotate around the body's centre, for the roll
 	sprite.play("idle", 2.0)
-	_guard = Node2D.new()
-	_guard.z_index = 5
-	_guard.draw.connect(_draw_guard)
-	add_child(_guard)
+	_shield = Sprite2D.new()
+	_shield.visible = false
+	add_child(_shield)
 
 func _layers_for(w: String) -> Array:
 	var l: Array = Weapons.DATA[w].layers
-	return ["res://assets/sprites/spartan_back.png", l[0], "res://assets/sprites/spartan.png", l[1]]
+	return ["res://assets/sprites/spartan_back.png", "res://assets/sprites/aspis_bg.png", l[0],
+		"res://assets/sprites/spartan.png", "res://assets/sprites/aspis_fg.png", l[1]]
+
+const ASPIS_LAYERS := [1, 4]  # indices of the shield layers in _layers_for()
 
 func _physics_process(delta: float) -> void:
 	queue_redraw()
@@ -86,7 +90,8 @@ func _physics_process(delta: float) -> void:
 	velocity += apply_knockback(delta)
 	move_and_slide()
 	_guard_flash = maxf(0.0, _guard_flash - delta)
-	_guard.queue_redraw()
+	_guard_jolt = maxf(0.0, _guard_jolt - delta)
+	_update_shield()
 	invulnerable = (state == State.ROLL and _t > ROLL_IFRAMES.x and _t < ROLL_IFRAMES.y) or _hit_iframes > 0.0
 	stats_changed.emit()
 
@@ -141,6 +146,10 @@ func _free(input: Vector2) -> void:
 	sprite.set_dir(LpcSprite.dir_from_vector(facing))
 	if input != Vector2.ZERO:
 		sprite.play("walk", 11.0)
+		_step_t -= get_physics_process_delta_time()
+		if _step_t <= 0.0:
+			_step_t = 0.3
+			Sfx.play(self, "step_%d" % (randi() % 3), null, -10.0, 0.15)
 	else:
 		sprite.play("idle", 2.0)
 
@@ -184,6 +193,7 @@ func _start_roll(input: Vector2) -> void:
 	sprite.set_dir(LpcSprite.dir_from_vector(_roll_dir))
 	sprite.play("jump", 0.0, false, true)
 	sprite.set_frame(1)
+	Sfx.play(self, "roll", null, -4.0)
 	Fx.dust(get_parent(), global_position, -_roll_dir)
 
 ## The roll: crouch, a full tumble while tucked, then a crouched landing.
@@ -306,6 +316,8 @@ func _attack(_delta: float) -> void:
 func _spawn_hitbox() -> void:
 	var center := global_position + Vector2(0, -18)
 	var pos := center + facing * float(_atk.reach)
+	var swing := "swing_heavy" if _atk_kind == "heavy" else ("thrust" if weapon == "spear" else "swing_light")
+	Sfx.play(self, swing, null, -3.0)
 	Hitbox.spawn(get_parent(), self, pos, facing.angle(), _atk.shape, _atk.size,
 		_atk.damage, _atk.poise, 16, _atk.active + 0.02)
 	if _atk.shape == "circle":
@@ -327,7 +339,7 @@ func _block_pose() -> void:
 	sprite.set_dir(LpcSprite.dir_from_vector(facing))
 	if weapon == "spear":
 		sprite.play("thrust", 0.0, false, true)
-		sprite.set_frame(1)
+		sprite.set_frame(0)
 	else:
 		sprite.play("slash", 0.0, false, true)
 		sprite.set_frame(0)
@@ -381,6 +393,7 @@ func receive_hit(h: Hitbox) -> void:
 		# Perfect parry: no cost, the attacker is thrown off balance.
 		stamina = minf(max_stamina, stamina + 10.0)
 		_guard_flash = 0.3
+		Sfx.play(self, "parry", null, 0.0, 0.03)
 		Fx.ring(get_parent(), spark, 2, 26, Color(1, 0.9, 0.4), 0.25, 3)
 		Fx.hit_spark(get_parent(), spark)
 		Fx.float_text(get_parent(), global_position + Vector2(0, -56), "Parade !", Color(1, 0.9, 0.4))
@@ -393,28 +406,58 @@ func receive_hit(h: Hitbox) -> void:
 	_stamina_wait = STAMINA_DELAY
 	knockback = (global_position - from).normalized() * (40.0 + h.damage * 2.0)
 	Fx.hit_spark(get_parent(), spark)
-	_guard_flash = 0.12
+	_guard_jolt = 0.1
 	if stamina >= cost:
 		stamina -= cost
 		Fx.shake(2)
+		Sfx.play(self, "block", null, -2.0)
 		return
+	Sfx.play(self, "guard_break")
 	# Guard broken: the shield is knocked aside and half the blow gets through.
 	stamina = 0.0
 	Fx.float_text(get_parent(), global_position + Vector2(0, -56), "Garde brisée", Color(1, 0.5, 0.3))
 	take_hit(int(h.damage * 0.5), 99.0, from)
 	_stagger_time = 0.9
 
-func _draw_guard() -> void:
-	if state != State.BLOCK:
+## Shows the shield held up in front of the body, facing the threat:
+## round face toward the camera, edge-on to the sides, inner face from behind.
+## It snaps up in a few frames, flashes gold during the parry window and
+## jolts when a blow lands on it.
+func _update_shield() -> void:
+	var blocking := state == State.BLOCK
+	for i in ASPIS_LAYERS:
+		sprite.set_layer_visible(i, not blocking)
+	_shield.visible = blocking
+	if not blocking:
 		return
-	var c := Vector2(0, -20)
-	var a := facing.angle()
-	var col := Color(0.85, 0.6, 0.3, 0.55)
-	var w := 2.0
-	if is_parrying() or _guard_flash > 0.0:
-		col = Color(1, 0.95, 0.55, 0.95)
-		w = 3.0
-	_guard.draw_arc(c, 20, a - BLOCK_ARC * 0.8, a + BLOCK_ARC * 0.8, 14, col, w)
+	var d := LpcSprite.dir_from_vector(facing)
+	var target := Vector2.ZERO
+	match d:
+		LpcSprite.Dir.DOWN:
+			_shield.texture = preload("res://assets/sprites/shield_front.png")
+			target = Vector2(-2, -27)
+			_shield.flip_h = false
+			_shield.z_index = 1
+		LpcSprite.Dir.UP:
+			_shield.texture = preload("res://assets/sprites/shield_back.png")
+			target = Vector2(-10, -26)  # peeks out beside the body
+			_shield.flip_h = false
+			_shield.z_index = -1
+		_:
+			_shield.texture = preload("res://assets/sprites/shield_side.png")
+			var side := -1.0 if d == LpcSprite.Dir.LEFT else 1.0
+			target = Vector2(10 * side, -24)
+			_shield.flip_h = side > 0
+			_shield.z_index = 1
+	var raise := clampf(_t / 0.07, 0.0, 1.0)
+	_shield.position = Vector2(0, -12).lerp(target, raise) - facing * 3.0 * (_guard_jolt / 0.1)
+	_shield.scale = Vector2.ONE * lerpf(0.75, 1.0, raise)
+	if _guard_flash > 0.0:
+		_shield.modulate = Color(2.2, 1.9, 1.0)
+	elif is_parrying():
+		_shield.modulate = Color(1.35, 1.25, 0.95)
+	else:
+		_shield.modulate = Color.WHITE
 
 # --- healing -------------------------------------------------------------
 
@@ -428,6 +471,7 @@ func _heal(input: Vector2) -> void:
 		_healed = true
 		flasks -= 1
 		hp = mini(max_hp, hp + HEAL_AMOUNT)
+		Sfx.play(self, "heal", null, -4.0, 0.0)
 		Fx.ring(get_parent(), global_position, 4, 22, Color(0.5, 1, 0.5), 0.4)
 		Fx.float_text(get_parent(), global_position + Vector2(0, -50), "+%d" % HEAL_AMOUNT, Color(0.5, 1, 0.5))
 	if _t >= HEAL_TIME:
@@ -443,6 +487,7 @@ func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 		poise = max_poise
 	var hit := super.take_hit(dmg, poise_dmg, from)
 	if hit:
+		Sfx.play(self, "player_hurt", null, -2.0)
 		_hit_iframes = 0.45
 		Fx.shake(4.0 + dmg * 0.1)
 		Fx.hitstop(get_tree(), 0.07)
@@ -458,6 +503,7 @@ func on_stagger() -> void:
 
 func die() -> void:
 	state = State.DEAD
+	Sfx.play(self, "player_death", null, 0.0, 0.0)
 	sprite.modulate = Color.WHITE
 	_reset_sprite()
 	super.die()

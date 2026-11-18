@@ -66,6 +66,22 @@ func _shield_test(p: Player) -> void:
 	behind.queue_free()
 	for h in hits:
 		h.free()
+	await _wait(0.2)
+	# Raised shield in each direction, with no enemy around to turn toward.
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e is SkeletonEnemy:
+			e.queue_free()
+	await _wait(0.8)
+	Input.action_press("block")
+	for dir in ["move_down", "move_left", "move_up", "move_right"]:
+		Input.action_press(dir)
+		await _wait(0.12)
+		log_lines.append("%s pressed: vector %s up=%s down=%s near=%s" % [dir, Input.get_vector("move_left", "move_right", "move_up", "move_down"), Input.is_action_pressed("move_up"), Input.is_action_pressed("move_down"), p._nearest_enemy(150.0)])
+		Input.action_release(dir)
+		await _wait(0.1)
+		log_lines.append("%s: state %d facing %s dir %d" % [dir, p.state, p.facing, p.sprite.dir])
+		await _shot("block_" + dir)
+	Input.action_release("block")
 	await _wait(0.6)
 
 func _run() -> void:

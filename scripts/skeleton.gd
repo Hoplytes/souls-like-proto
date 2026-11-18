@@ -26,6 +26,7 @@ func _ready() -> void:
 	collision_layer = 4
 	collision_mask = 1 | 2 | 4
 	add_to_group("enemies")
+	hit_sound = "hit_bone"
 	setup_body(["res://assets/sprites/sword_bg.png", "res://assets/sprites/skeleton.png", "res://assets/sprites/sword_fg.png"], 16)
 	home = global_position
 	sprite.play("idle", 2.0)
@@ -74,6 +75,7 @@ func _physics_process(delta: float) -> void:
 				var c := global_position + Vector2(0, -18)
 				Hitbox.spawn(get_parent(), self, c + facing * 20, 0, "circle", Vector2(26, 0), 18, 1, 8, 0.12)
 				Fx.slash_arc(get_parent(), c, facing.angle(), 34, Color(1, 0.5, 0.4))
+				Sfx.play(self, "skeleton_swing", global_position)
 		State.ATTACK:
 			velocity = facing * 90.0
 			sprite.set_frame(3 + int(_t / 0.12 * 2))
@@ -125,6 +127,7 @@ func on_hurt() -> void:
 
 func die() -> void:
 	state = State.DEAD
+	Sfx.play(self, "skeleton_death", global_position)
 	sprite.modulate = Color.WHITE
 	super.die()
 	var t := create_tween()

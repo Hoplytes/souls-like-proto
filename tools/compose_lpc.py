@@ -101,13 +101,26 @@ LEATHER = (16, 95, 0.75)
 SPARTAN = ["body/bodies/male", "head/heads/human/male", "head/faces/male/neutral",
            "feet/sandals/male", ("legs/armour/plate/male",) + BRONZE, ("legs/skirts/legion/male",) + LEATHER,
            ("torso/armour/legion/male",) + BRONZE, lambda a: f"shoulders/legion/male/{a}/bronze.png",
-           "arms/bracers/male", ("cape/solid/fg",) + RED, lambda a: f"shield/spartan/fg/{a}/spartan.png",
+           "arms/bracers/male", ("cape/solid/fg",) + RED,
            ("hat/helmet/legion/adult",) + BRONZE, ("hat/accessory/crest/adult",) + RED]
-SPARTAN_BACK = [lambda a: f"shield/spartan/bg/{a}/spartan.png", ("cape/solid/bg",) + RED]
+SPARTAN_BACK = [("cape/solid/bg",) + RED]
 
 compose("knight", KNIGHT)
 compose("spartan", SPARTAN)
 compose("spartan_back", SPARTAN_BACK)
+# The shield is its own layer so it can be hidden when it is raised to block.
+compose("aspis_bg", [lambda a: f"shield/spartan/bg/{a}/spartan.png"])
+compose("aspis_fg", [lambda a: f"shield/spartan/fg/{a}/spartan.png"])
+
+def shield_pose(name, sheet, row, flip=False):
+    """One frame of the shield, cut out for the raised-shield sprite."""
+    im = Image.open(os.path.join(SRC, sheet)).convert("RGBA").crop((0, row * 64, 64, row * 64 + 64))
+    im = im.crop(im.getchannel("A").getbbox())
+    im.save(os.path.join(OUT, name + ".png"))
+
+shield_pose("shield_front", "shield/spartan/fg/walk/spartan.png", 1)
+shield_pose("shield_side", "shield/spartan/fg/walk/spartan.png", 2)
+shield_pose("shield_back", "shield/spartan/bg/walk/spartan.png", 0)
 compose("sword_bg", [sword("bg")])
 compose("sword_fg", [sword("fg")])
 compose("spear_bg", [spear("background")])

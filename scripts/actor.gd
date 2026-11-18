@@ -17,6 +17,7 @@ var knockback := Vector2.ZERO
 var sprite: LpcSprite
 var hurtbox: Area2D
 var body_height := 40.0
+var hit_sound := "hit_flesh"
 var shadow_size := Vector2(12, 5)
 
 func setup_body(layers: Array, hurt_layer: int, radius: float = 7.0) -> void:
@@ -75,6 +76,7 @@ func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 		Fx.float_text(get_parent(), global_position + Vector2(0, -body_height - 14), "Riposte !", Color(1, 0.85, 0.3))
 	hp = maxi(0, hp - dmg)
 	poise -= poise_dmg
+	Sfx.play(self, hit_sound, global_position)
 	damaged.emit(dmg)
 	var away := (global_position - from).normalized()
 	knockback = away * knockback_strength(dmg)
