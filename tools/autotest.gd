@@ -180,6 +180,22 @@ func _run() -> void:
 	main._close_menu()
 	await _wait(0.2)
 	log_lines.append("after close: paused %s" % get_tree().paused)
+	main.open_map()
+	await _wait(0.3)
+	await _shot("menu_map")
+	main._map_screen.get_child(0).closed.emit()
+	await _wait(0.2)
+	log_lines.append("after map: paused %s" % get_tree().paused)
+	# Weight: how long the hero takes to reach full speed, and to stop.
+	var t0 := p.global_position
+	Input.action_press("move_right")
+	await _wait(0.1)
+	log_lines.append("speed after 0.1 s: %.0f" % p.velocity.length())
+	await _wait(0.4)
+	log_lines.append("speed after 0.5 s: %.0f" % p.velocity.length())
+	Input.action_release("move_right")
+	await _wait(0.1)
+	log_lines.append("speed 0.1 s after release: %.0f (moved %.0f px)" % [p.velocity.length(), p.global_position.distance_to(t0)])
 	# A tour of every place of the teleport menu.
 	p.invulnerable = true
 	var places: Array = main.teleport_places()
@@ -200,7 +216,7 @@ func _run() -> void:
 	p.global_position = main.arena_entry()
 	await _wait(0.3)
 	Input.action_press("move_up")
-	await _wait(1.2)
+	await _wait(1.6)
 	Input.action_release("move_up")
 	await _wait(0.8)
 	await _shot("06_boss_intro")

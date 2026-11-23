@@ -10,10 +10,17 @@ signal stats_changed
 enum State { FREE, ROLL, ATTACK, HEAL, BLOCK, STAGGER, DEAD }
 
 const SPEED := 95.0
-const ROLL_TIME := 0.48
-const ROLL_IFRAMES := Vector2(0.03, 0.36)
+## Weight: the hero takes time to get going, to stop and to turn.
+const ACCEL := 420.0  # px/s² (full speed in ~0.23 s)
+const DECEL := 650.0
+const TURN_SPEED := 9.0  # rad/s
+## Walk cycle speed: fewer, longer steps for the same distance.
+const WALK_ANIM := 7.5
+const ROLL_TIME := 0.56
+const ROLL_IFRAMES := Vector2(0.04, 0.38)
+const ROLL_RECOVERY := 0.16  # end of the roll where nothing can be done
 const ROLL_COST := 22.0
-const STAMINA_REGEN := 55.0
+const STAMINA_REGEN := 45.0
 const STAMINA_DELAY := 0.5
 const BUFFER_TIME := 0.3
 const HEAL_TIME := 0.9
@@ -136,20 +143,27 @@ func _to_free() -> void:
 # --- free movement -------------------------------------------------------
 
 func _free(input: Vector2) -> void:
+	var delta := get_physics_process_delta_time()
 	if input != Vector2.ZERO:
-		facing = input.normalized()
+		_turn_toward(input.normalized(), delta)
 	var action := _take_buffer(["roll", "attack_light", "attack_heavy", "heal", "block"])
 	if _start_action(action, input):
 		return
 	if Input.is_action_pressed("block"):
 		_start_block()
 		return
-	velocity = input * SPEED
+	# Momentum: speed builds up along the way the hero faces.
 	if input != Vector2.ZERO:
-		sprite.play("walk", 11.0)
-		_step_t -= get_physics_process_delta_time()
+		var target := facing * SPEED * minf(1.0, input.length())
+		velocity = velocity.move_toward(target, ACCEL * delta)
+	else:
+		velocity = velocity.move_toward(Vector2.ZERO, DECEL * delta)
+	var pace := velocity.length() / SPEED
+	if pace > 0.1:
+		sprite.play("walk", WALK_ANIM * clampf(pace, 0.5, 1.0))
+		_step_t -= delta * pace
 		if _step_t <= 0.0:
-			_step_t = 0.3
+			_step_t = 4.5 / WALK_ANIM  # two steps per walk cycle
 			Sfx.flare(self, "steps/step_%s%d" % [_step_kind(), randi_range(1, 4)], null, -10.0, 0.08)
 	else:
 		sprite.play("idle", 2.0)
@@ -178,6 +192,12 @@ func _start_action(action: String, input: Vector2) -> bool:
 				return true
 	return false
 
+## Turns the hero at a limited speed (no instant about-turn).
+func _turn_toward(dir: Vector2, delta: float) -> void:
+	var a := facing.angle()
+	var b := dir.angle()
+	facing = Vector2.from_angle(rotate_toward(a, b, TURN_SPEED * delta))
+
 # --- roll ----------------------------------------------------------------
 
 func _start_roll(input: Vector2) -> void:
@@ -198,15 +218,18 @@ func _start_roll(input: Vector2) -> void:
 ## The roll. The HD knight has a real animation; the modular hero dashes
 ## low: a crouch, two quick squashes while tucked, then a landing.
 func _roll(delta: float) -> void:
-	var k := _t / ROLL_TIME
-	velocity = _roll_dir * lerpf(300.0, 90.0, k * k)  # ~110 px
+	var k := minf(1.0, _t / ROLL_TIME)
+	if _t > ROLL_TIME:  # committed: a short recovery, slowing to a stop
+		velocity = _roll_dir * lerpf(60.0, 0.0, (_t - ROLL_TIME) / ROLL_RECOVERY)
+		if _t >= ROLL_TIME + ROLL_RECOVERY:
+			_to_free()
+		return
+	velocity = _roll_dir * lerpf(255.0, 80.0, k * k)  # ~110 px
 	if hd:  # the HD hero has a real roll animation
 		sprite.set_progress(k)
 		if k > 0.8 and not _landed:
 			_landed = true
 			Fx.dust(get_parent(), global_position, _roll_dir * 0.5)
-		if _t >= ROLL_TIME:
-			_to_free()
 		return
 	var tumble := clampf((k - 0.12) / 0.68, 0.0, 1.0)  # 0..1 during the tucked part
 	if k < 0.12:
@@ -229,8 +252,6 @@ func _roll(delta: float) -> void:
 		if _ghost_t <= 0.0:
 			_spawn_ghost()
 			_ghost_t = 0.07
-	if _t >= ROLL_TIME:
-		_to_free()
 
 func _reset_sprite() -> void:
 	sprite.scale = Vector2.ONE
@@ -293,14 +314,14 @@ func _attack(_delta: float) -> void:
 		_atk_phase = 2
 		var k := (_t - wu - ac) / rc
 		# Chain a combo, or roll out of the second half of the recovery.
-		if k > 0.25 and _buffer in ["attack_light", "attack_heavy"] and _combo < 2 and stamina > 0.0:
+		if k > 0.45 and _buffer in ["attack_light", "attack_heavy"] and _combo < 2 and stamina > 0.0:
 			var kind := "light" if _take_buffer(["attack_light", "attack_heavy"]) == "attack_light" else "heavy"
 			_combo += 1
 			_start_attack(kind, Input.get_vector("move_left", "move_right", "move_up", "move_down"))
-		elif k > 0.5 and _buffer == "block":
+		elif k > 0.7 and _buffer == "block":
 			_buffer = ""
 			_start_block()
-		elif k > 0.5 and _buffer == "roll" and _spend(ROLL_COST):
+		elif k > 0.7 and _buffer == "roll" and _spend(ROLL_COST):
 			_buffer = ""
 			_start_roll(Input.get_vector("move_left", "move_right", "move_up", "move_down"))
 	else:

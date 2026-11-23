@@ -98,6 +98,15 @@ var _torch: PointLight2D
 var _ended := false
 var _active_t := 0.0
 var _menu: GameMenu
+var _map_screen: CanvasLayer
+var _menu_guard := 0  # physics frame until which Esc/Tab cannot reopen a menu
+## The map (one pixel per cell, coloured by biome; scenery darker), for the map screen.
+var map_image := Image.create(W, W, false, Image.FORMAT_RGBA8)
+var hall_image := Image.create(HALL, HALL, false, Image.FORMAT_RGBA8)
+const MAP_COLORS := {
+	"prairie": Color(0.36, 0.46, 0.2), "ruins": Color(0.45, 0.43, 0.38), "snow": Color(0.84, 0.87, 0.92),
+	"caves": Color(0.36, 0.27, 0.19), "dungeon": Color(0.25, 0.23, 0.26),
+}
 
 # The old single-level names, used by the test scripts.
 var start_pos := Vector2.ZERO
@@ -290,6 +299,8 @@ func _build_world() -> void:
 			var tileset: String = BIOMES[b].tiles
 			var patch := _noise.get_noise_2d(i * 7.0 + 900.0, j * 7.0) > 0.3
 			_set_floor(i, j, tileset, _pick(FLOOR_PATCHES[b] if patch else FLOORS[b]))
+			var col: Color = MAP_COLORS[b]
+			map_image.set_pixel(i, j, col.darkened(0.12) if patch else col)
 			var c := Vector2i(i, j)
 			var edge := i < 3 or j < 3 or i >= W - 3 or j >= W - 3
 			if _blocked.has(c):
@@ -335,6 +346,8 @@ func _decor(b: String, tileset: String, c: Vector2, solid_only: bool) -> void:
 			var id := _rng.randi_range(e[0], e[1])
 			if e[2] > 0:
 				_solid(tileset, id, cell_of(c), e[2])
+				var px := Vector2i(clampi(int(c.x), 0, W - 1), clampi(int(c.y), 0, W - 1))
+				map_image.set_pixelv(px, map_image.get_pixelv(px).darkened(0.45))
 			else:
 				_tile(tileset, id, cell_of(c), world)
 			return
@@ -362,6 +375,7 @@ func _build_dungeon() -> void:
 			var cobble := Vector2(i + 0.5, j + 0.5).distance_to(arena_c) < ARENAS.minotaur.radius + 0.6
 			var ids: Array = DUNGEON_FLOOR_COBBLE if cobble else DUNGEON_FLOOR_PLAIN
 			_set_floor(int(HALL_AT.x) + i, int(HALL_AT.y) + j, "dungeon", ids[_rng.randi() % ids.size()])
+			hall_image.set_pixel(i, j, MAP_COLORS.dungeon.lightened(0.15) if cobble else MAP_COLORS.dungeon)
 	_tile("dungeon", 265, _hall(arena_c.x, arena_c.y), _floor_decor(), 1)
 	for k in 4:
 		var a := k * TAU / 4.0 + PI / 4.0
@@ -560,8 +574,12 @@ func _physics_process(delta: float) -> void:
 			_close_arena(model)
 	if Input.is_action_just_pressed("teleport") and not player.dead:
 		open_teleport_menu()
-	if Input.is_action_just_pressed("pause") and not player.dead:
+	if Engine.get_physics_frames() <= _menu_guard:
+		pass
+	elif Input.is_action_just_pressed("pause") and not player.dead:
 		open_pause_menu()
+	elif Input.is_action_just_pressed("map") and not player.dead:
+		open_map()
 	if Input.is_action_just_pressed("help"):
 		hud.show_help = not hud.show_help
 	if Input.is_action_just_pressed("sound_set"):
@@ -698,6 +716,7 @@ func _open_menu(title: String, items: Array, footer: String = "") -> void:
 	_menu = GameMenu.open(self, title, items, footer)
 	_menu.closed.connect(func():
 		_menu = null
+		_menu_guard = Engine.get_physics_frames() + 2
 		get_tree().paused = false)
 
 func _close_menu() -> void:
@@ -709,6 +728,7 @@ func open_pause_menu() -> void:
 	var muted := AudioServer.is_bus_mute(0)
 	_open_menu("Pause", [
 		["Reprendre", _close_menu],
+		["Carte", open_map],
 		["Téléportation…", open_teleport_menu],
 		["Aide à l'écran : " + ("affichée" if hud.show_help else "masquée"), func():
 			hud.show_help = not hud.show_help
@@ -729,7 +749,26 @@ func open_pause_menu() -> void:
 	] + ([] if OS.has_feature("web") else [["Quitter le jeu", func(): get_tree().quit()]]),
 		"Échap ou B pour reprendre")
 
-## T / Select, or from the pause menu: jump to any bonfire or boss.
+## Tab / Select, or from the pause menu: the map of the world.
+func open_map() -> void:
+	_close_menu()
+	if _map_screen:
+		return
+	get_tree().paused = true
+	_map_screen = CanvasLayer.new()
+	_map_screen.layer = 10
+	_map_screen.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_map_screen)
+	var view := MapView.new()
+	view.game = self
+	_map_screen.add_child(view)
+	view.closed.connect(func():
+		_map_screen.queue_free()
+		_map_screen = null
+		_menu_guard = Engine.get_physics_frames() + 2
+		get_tree().paused = false)
+
+## T, or from the pause menu: jump to any bonfire or boss.
 func open_teleport_menu() -> void:
 	if not _sealed.is_empty():
 		_close_menu()
@@ -763,7 +802,8 @@ static func setup_inputs() -> void:
 		"pause": [[KEY_ESCAPE], [KEY_P], ["btn", JOY_BUTTON_START]],
 		"mute": [[KEY_M]],
 		"sound_set": [[KEY_N]],
-		"teleport": [[KEY_T], ["btn", JOY_BUTTON_BACK]],
+		"teleport": [[KEY_T]],
+		"map": [[KEY_TAB], ["btn", JOY_BUTTON_BACK]],
 	}
 	for action in map:
 		if InputMap.has_action(action):

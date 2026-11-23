@@ -20,7 +20,8 @@ Flare est stocké à sa pleine résolution (`RES = 2` dans `tools/convert_flare.
   - **Grottes d'ambre** (nord) : stalagmites, fourmilions, fourmis de feu, et le portail du donjon.
 - Le **Labyrinthe d'Astérion**, un donjon éclairé par des braseros, atteint par un portail dans les grottes.
 - **Téléportation de test** : la touche **T** ouvre un menu vers tous les feux de camp et toutes les arènes de boss.
-- **Combat** : roulade avec frames d'invincibilité (culbute), endurance, attaques légères (combo x3) et
+- **Combat** au poids assumé : le héros prend de l'élan, tourne et s'arrête avec un temps de latence, et chaque
+  action engage (roulade avec courte reprise d'appui, attaques sans annulation avant la fin du coup). Roulade avec frames d'invincibilité (culbute), endurance, attaques légères (combo x3) et
   lourdes (super-armure pendant le coup), **bouclier** (blocage, parade au bon moment, riposte à double dégâts),
   fioles de soin. Chaque famille d'armes a son rythme : dague, épée, hache, arme contondante, arme à deux mains.
 - Deux boss, **Glacevive, la Wyverne des cimes** et **Astérion, le Minotaure** : grand coup de hache en arc, saut écrasant et charge, annoncés par une
@@ -37,7 +38,8 @@ Flare est stocké à sa pleine résolution (`RES = 2` dans `tools/convert_flare.
 | Attaque lourde | K ou clic droit | Y ou RT |
 | Boire une fiole | R | LT |
 | Se reposer au feu | E | A |
-| Téléportation (test) | T, puis un chiffre ou un clic | Select |
+| Carte | Tab | Select |
+| Téléportation (test) | T, puis un chiffre ou un clic | (menu pause) |
 | Menu pause (reprendre, téléportation, son, aide, créateur, recommencer) | Échap ou P | Start |
 | Aide | H | |
 | Couper / remettre le son | M | |
@@ -53,6 +55,7 @@ Flare est stocké à sa pleine résolution (`RES = 2` dans `tools/convert_flare.
 | `scripts/hd_sprite.gd` | Joue une planche en 8 directions (pièces du héros, ennemis, chevalier HD) |
 | `scripts/game.gd` | Le monde ouvert (biomes, décors, donjon, portails, téléportation) et le déroulement de la partie |
 | `scripts/game_menu.gd` | Menus du jeu en pause (pause, téléportation) |
+| `scripts/map_view.gd` | L'écran de carte |
 | `scripts/player.gd` | Le joueur : états, roulade, endurance, combos, bouclier, soin |
 | `scripts/weapons.gd` | **Les armes et leurs styles de combat, sous forme de données** |
 | `scripts/actor.gd` | Base commune : santé, poise (résistance), coups reçus, parade, riposte, mort |
