@@ -285,6 +285,8 @@ func _physics_process(delta: float) -> void:
 		_close_gate()
 	if Input.is_action_just_pressed("help"):
 		hud.show_help = not hud.show_help
+	if Input.is_action_just_pressed("switch_hero"):
+		player.set_hero(not player.hd)
 	if Input.is_action_just_pressed("sound_set"):
 		Fx.float_text(world, player.global_position + Vector2(0, -60), Sfx.toggle_set(self), Color(0.8, 0.9, 1))
 	if Input.is_action_just_pressed("mute"):
@@ -341,6 +343,7 @@ func _setup_inputs() -> void:
 		"help": [[KEY_H], ["btn", JOY_BUTTON_START]],
 		"mute": [[KEY_M]],
 		"sound_set": [[KEY_N]],
+		"switch_hero": [[KEY_C]],
 	}
 	for action in map:
 		if InputMap.has_action(action):

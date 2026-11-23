@@ -30,6 +30,7 @@ Prototype de combat souls-like en vue de dessus, en pixel art, fait avec **Godot
 | Aide | H | Start |
 | Couper / remettre le son | M | |
 | Sons enregistrés ↔ sons de synthèse | N | |
+| Spartiate ↔ chevalier HD (si installé) | C | |
 
 ## Organisation du code
 

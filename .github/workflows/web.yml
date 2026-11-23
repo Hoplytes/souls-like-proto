@@ -16,12 +16,23 @@ concurrency:
 
 env:
   GODOT_VERSION: "4.5"
+  # Read access to the private repository of licensed art (optional: without
+  # it the game is built with the free art only).
+  ASSETS_TOKEN: ${{ secrets.ASSETS_TOKEN }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Licensed art from the private repository
+        if: ${{ env.ASSETS_TOKEN != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: Hoplytes/souls-like-assets
+          token: ${{ env.ASSETS_TOKEN }}
+          path: local
 
       - name: Install Godot and the web export template
         run: |

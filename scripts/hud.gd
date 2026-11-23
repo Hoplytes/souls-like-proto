@@ -20,6 +20,7 @@ const HELP := [
 	"  lever le bouclier au moment du coup = parade",
 	"R : boire une fiole    Tab : changer d'arme",
 	"E : feu de camp   H : aide   M : son   N : type de sons",
+	"C : Spartiate / chevalier HD",
 	"Manette : A/B/X/Y, LB bouclier, LT fiole, RB/RT attaques",
 ]
 

@@ -79,7 +79,7 @@ func _shield_test(p: Player) -> void:
 		log_lines.append("%s pressed: vector %s up=%s down=%s near=%s" % [dir, Input.get_vector("move_left", "move_right", "move_up", "move_down"), Input.is_action_pressed("move_up"), Input.is_action_pressed("move_down"), p._nearest_enemy(150.0)])
 		Input.action_release(dir)
 		await _wait(0.1)
-		log_lines.append("%s: state %d facing %s dir %d" % [dir, p.state, p.facing, p.sprite.dir])
+		log_lines.append("%s: state %d facing %s" % [dir, p.state, p.facing])
 		await _shot("block_" + dir)
 	Input.action_release("block")
 	await _wait(0.6)
@@ -131,6 +131,14 @@ func _run() -> void:
 	var p: Player = main.player
 	await _wait(1.0)
 	await _shot("01_start")
+	var hd0 := p.hd
+	await _press("switch_hero")
+	await _wait(0.2)
+	log_lines.append("hero switch: hd %s -> %s" % [hd0, p.hd])
+	await _shot("01b_switched")
+	await _press("switch_hero")
+	await _wait(0.2)
+	log_lines.append("hero switch back: hd %s" % p.hd)
 	# Walk up to the first skeleton and fight it.
 	Input.action_press("move_up")
 	await _wait(1.6)

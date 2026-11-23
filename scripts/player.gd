@@ -53,6 +53,26 @@ var hd := false
 func make_sprite():
 	return HdSprite.new() if hd else LpcSprite.new()
 
+## Switches between the LPC Spartan and the HD test hero (key C), when the
+## HD art is installed.
+func set_hero(use_hd: bool) -> void:
+	if use_hd == hd or (use_hd and not HdSprite.available()):
+		return
+	hd = use_hd
+	weapon = "sword" if hd else "spear"
+	shadow_size = Vector2.ZERO if hd else Vector2(12, 5)
+	var old = sprite
+	sprite = make_sprite()
+	add_child(sprite)
+	move_child(sprite, old.get_index())
+	old.queue_free()
+	sprite.set_layers(_layers_for(weapon))
+	sprite.pivot = 22.0
+	sprite.play("idle", 2.0)
+	_shield.visible = false
+	_to_free()
+	Fx.float_text(get_parent(), global_position + Vector2(0, -56), "Chevalier HD" if hd else "Spartiate", Color(0.9, 0.85, 0.6))
+
 func _ready() -> void:
 	hd = HdSprite.available()
 	if hd:
