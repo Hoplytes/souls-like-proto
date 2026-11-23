@@ -14,7 +14,7 @@ var poise := 30.0
 var dead := false
 var invulnerable := false
 var knockback := Vector2.ZERO
-var sprite: LpcSprite
+var sprite  # LpcSprite, or HdSprite for the HD test hero
 var hurtbox: Area2D
 var body_height := 40.0
 var hit_sound := "hit_flesh"
@@ -33,7 +33,7 @@ func setup_body(layers: Array, hurt_layer: int, radius: float = 7.0, cell: int =
 	c.radius = radius
 	cs.shape = c
 	add_child(cs)
-	sprite = LpcSprite.new()
+	sprite = make_sprite()
 	sprite.cell = cell
 	add_child(sprite)
 	sprite.set_layers(layers)
@@ -51,7 +51,13 @@ func setup_body(layers: Array, hurt_layer: int, radius: float = 7.0, cell: int =
 	hurtbox.add_child(hs)
 	add_child(hurtbox)
 
+## The sprite that draws this actor; the player may use an HD one.
+func make_sprite():
+	return LpcSprite.new()
+
 func _draw() -> void:
+	if shadow_size.x <= 0.0:
+		return  # the sprite draws its own shadow
 	draw_set_transform(Vector2.ZERO, 0, Vector2(1, shadow_size.y / shadow_size.x))
 	draw_circle(Vector2.ZERO, shadow_size.x, Color(0, 0, 0, 0.35))
 

@@ -96,6 +96,11 @@ func _ready() -> void:
 	hud.boss = boss
 	get_tree().create_timer(12.0).timeout.connect(func(): hud.show_help = false)
 	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--showcase="):
+			var sc: Node = load("res://tools/showcase.gd").new()
+			sc.main = self
+			sc.out = a.trim_prefix("--showcase=")
+			add_child(sc)
 		if a.begins_with("--autotest="):
 			var t: Node = load("res://tools/autotest.gd").new()
 			t.main = self

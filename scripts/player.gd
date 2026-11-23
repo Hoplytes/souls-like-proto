@@ -46,8 +46,18 @@ var _shield: Sprite2D  # the shield raised in front of the body while blocking
 var _guard_flash := 0.0
 var _guard_jolt := 0.0
 var _step_t := 0.0
+## True when the HD test hero is installed in res://local/ (never published):
+## the player is then drawn with HdSprite and uses its own animations.
+var hd := false
+
+func make_sprite():
+	return HdSprite.new() if hd else LpcSprite.new()
 
 func _ready() -> void:
+	hd = HdSprite.available()
+	if hd:
+		weapon = "sword"  # the HD knight carries a sword and a shield
+		shadow_size = Vector2.ZERO  # its sheets include a shadow
 	max_hp = 120
 	max_poise = 1.0  # any hit staggers, except during heavy attacks
 	collision_layer = 2
@@ -91,7 +101,10 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_guard_flash = maxf(0.0, _guard_flash - delta)
 	_guard_jolt = maxf(0.0, _guard_jolt - delta)
-	_update_shield()
+	if hd:
+		sprite.facing8 = facing
+	else:
+		_update_shield()
 	invulnerable = (state == State.ROLL and _t > ROLL_IFRAMES.x and _t < ROLL_IFRAMES.y) or _hit_iframes > 0.0
 	stats_changed.emit()
 
@@ -176,6 +189,9 @@ func _start_action(action: String, input: Vector2) -> bool:
 				sprite.play("idle", 2.0)
 				return true
 		"switch_weapon":
+			if hd:
+				Fx.float_text(get_parent(), global_position + Vector2(0, -50), "Épée uniquement (héros HD)", Color(0.9, 0.85, 0.6))
+				return false
 			weapon = "spear" if weapon == "sword" else "sword"
 			sprite.set_layers(_layers_for(weapon))
 			Fx.float_text(get_parent(), global_position + Vector2(0, -50), Weapons.DATA[weapon].name, Color(0.9, 0.85, 0.6))
@@ -201,6 +217,14 @@ func _start_roll(input: Vector2) -> void:
 func _roll(delta: float) -> void:
 	var k := _t / ROLL_TIME
 	velocity = _roll_dir * lerpf(300.0, 90.0, k * k)  # ~110 px
+	if hd:  # the HD hero has a real roll animation
+		sprite.set_progress(k)
+		if k > 0.8 and not _landed:
+			_landed = true
+			Fx.dust(get_parent(), global_position, _roll_dir * 0.5)
+		if _t >= ROLL_TIME:
+			_to_free()
+		return
 	var tumble := clampf((k - 0.12) / 0.68, 0.0, 1.0)  # 0..1 during the tucked part
 	var sideways := absf(_roll_dir.x) > absf(_roll_dir.y)
 	if k < 0.12:
@@ -237,7 +261,7 @@ func _reset_sprite() -> void:
 	sprite.position = Vector2(0, -sprite.pivot)
 
 func _spawn_ghost() -> void:
-	var g := sprite.duplicate()
+	var g: Node2D = sprite.duplicate()
 	g.set_process(false)
 	g.modulate = Color(0.35, 0.45, 0.85, 0.35)
 	g.global_position = sprite.global_position
@@ -270,7 +294,7 @@ func _start_attack(kind: String, input: Vector2) -> void:
 	_spend(_atk.stamina)
 	facing = _soft_lock(input)
 	sprite.set_dir(LpcSprite.dir_from_vector(facing))
-	sprite.play(w.anim, 0.0, false, true)
+	sprite.play(("slash_heavy" if kind == "heavy" else "slash") if hd else w.anim, 0.0, false, true)
 	state = State.ATTACK
 	_atk_phase = 0
 	_t = 0.0
@@ -279,13 +303,16 @@ func _attack(_delta: float) -> void:
 	var w: Dictionary = Weapons.DATA[weapon]
 	var f0: int = w.frames[0]
 	var f1: int = w.frames[1]
-	var n := sprite.frame_count()
+	var n: int = sprite.frame_count()
 	var wu: float = _atk.windup
 	var ac: float = _atk.active
 	var rc: float = _atk.recovery
 	velocity = Vector2.ZERO
+	if hd:
+		sprite.set_progress(_t / (wu + ac + rc))
 	if _t < wu:
-		sprite.set_frame(int(_t / wu * f0))
+		if not hd:
+			sprite.set_frame(int(_t / wu * f0))
 		if _atk_kind == "heavy":
 			sprite.modulate = Color(1.0, 1.0, 1.0).lerp(Color(1.6, 1.4, 0.9), _t / wu)
 	elif _t < wu + ac:
@@ -293,12 +320,14 @@ func _attack(_delta: float) -> void:
 			_atk_phase = 1
 			sprite.modulate = Color.WHITE
 			_spawn_hitbox()
-		sprite.set_frame(f0 + int((_t - wu) / ac * (f1 - f0)))
+		if not hd:
+			sprite.set_frame(f0 + int((_t - wu) / ac * (f1 - f0)))
 		velocity = facing * (_atk.step / ac)
 	elif _t < wu + ac + rc:
 		_atk_phase = 2
 		var k := (_t - wu - ac) / rc
-		sprite.set_frame(mini(n - 1, f1 + int(k * (n - f1))))
+		if not hd:
+			sprite.set_frame(mini(n - 1, f1 + int(k * (n - f1))))
 		# Chain a combo, or roll out of the second half of the recovery.
 		if k > 0.25 and _buffer in ["attack_light", "attack_heavy"] and _combo < 2 and stamina > 0.0:
 			var kind := "light" if _take_buffer(["attack_light", "attack_heavy"]) == "attack_light" else "heavy"
@@ -338,6 +367,13 @@ func _start_block() -> void:
 
 ## Hoplite guard: spear drawn back behind the shield, or sword raised.
 func _block_pose() -> void:
+	if hd:  # raise the shield, then hold it
+		if _t < 0.25:
+			sprite.play("block_start", 0.0, false)
+			sprite.set_progress(_t / 0.25)
+		else:
+			sprite.play("block", 12.0 * 8.0 / 15.0)
+		return
 	sprite.set_dir(LpcSprite.dir_from_vector(facing))
 	if weapon == "spear":
 		sprite.play("thrust", 0.0, false, true)
@@ -468,6 +504,9 @@ func _heal(input: Vector2) -> void:
 	if input != Vector2.ZERO:
 		facing = input.normalized()
 		sprite.set_dir(LpcSprite.dir_from_vector(facing))
+	if hd:
+		sprite.play("heal", 0.0, false)
+		sprite.set_progress(_t / HEAL_TIME)
 	sprite.modulate = Color(1, 1, 1).lerp(Color(0.8, 1.5, 0.8), sin(_t / HEAL_TIME * PI))
 	if not _healed and _t >= HEAL_TIME * 0.55:
 		_healed = true
@@ -501,7 +540,10 @@ func on_stagger() -> void:
 	_stagger_time = 0.35
 	sprite.modulate = Color.WHITE
 	_reset_sprite()
-	sprite.play("idle", 0.0)
+	if hd:
+		sprite.play("stagger", 15.0 / 0.35 * 6.0 / 15.0, false, true)
+	else:
+		sprite.play("idle", 0.0)
 
 func die() -> void:
 	state = State.DEAD
