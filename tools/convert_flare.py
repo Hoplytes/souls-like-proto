@@ -68,26 +68,27 @@ def convert(txt, out_dir, wanted, scale, cell, feet):
     json.dump(meta, open(os.path.join(out_dir, "anims.json"), "w"), indent=1)
     return meta
 
-def convert_tiles(tileset, ids, scale):
-    path = os.path.join(SRC, "tilesetdefs", tileset + ".txt")
-    img = None
-    tiles = {}
-    for line in open(path):
+def convert_tiles(defs, ids, scale, out_name, root=SRC):
+    """Cut tiles out of a Flare tileset (a tileset may use several images)."""
+    tiles, cache, img = {}, {}, None
+    for line in open(os.path.join(root, "tilesetdefs", defs + ".txt")):
         line = line.strip()
         if line.startswith("img="):
-            img = Image.open(os.path.join(SRC, line[4:])).convert("RGBA")
+            path = os.path.join(root, line[4:])
+            img = cache.setdefault(path, Image.open(path).convert("RGBA") if os.path.exists(path) else None)
         elif line.startswith("tile="):
             v = [int(x) for x in line[5:].split(",")[:7]]
-            tiles[v[0]] = v[1:]
-    os.makedirs(os.path.join(OUT, "tiles"), exist_ok=True)
+            tiles[v[0]] = v[1:] + [img]
+    out = os.path.join(OUT, "tiles", out_name)
+    os.makedirs(out, exist_ok=True)
     meta = {}
     for t in ids:
-        x, y, w, h, ox, oy = tiles[t]
-        piece = img.crop((x, y, x + w, y + h)).resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
-        piece.save(os.path.join(OUT, "tiles", f"{t}.png"), optimize=True)
+        x, y, w, h, ox, oy, im = tiles[t]
+        piece = im.crop((x, y, x + w, y + h)).resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
+        piece.save(os.path.join(out, f"{t}.png"), optimize=True)
         meta[str(t)] = [round(ox * scale), round(oy * scale)]
-    json.dump(meta, open(os.path.join(OUT, "tiles", "anchors.json"), "w"), indent=1)
-    print("tiles", len(ids))
+    json.dump(meta, open(os.path.join(out, "anchors.json"), "w"), indent=1)
+    print("tiles", out_name, len(ids))
 
 FIGHT = ["stance", "run", "swing", "hit", "die"]
 
@@ -119,4 +120,42 @@ FLOORS = [16, 17, 18, 19, 22, 23, 26, 29, 30] + list(range(32, 48)) + list(range
 # Walls come in pairs: even = textured left face, odd = textured right face.
 WALLS = [64, 65, 66, 68, 69, 96, 97, 98, 99, 102, 103, 106, 107]
 PROPS = [110, 111, 128, 129, 130, 131, 151, 167] + list(range(176, 184)) + [194, 197, 199, 200, 264, 265]
-convert_tiles("tileset_dungeon", FLOORS + WALLS + PROPS, 0.5)
+convert_tiles("tileset_dungeon", FLOORS + WALLS + PROPS, 0.5, "dungeon")
+
+# --- Open world biomes (tile numbers from each tileset's definition file) ---
+convert_tiles("tileset_grassland",
+    list(range(16, 48)) + list(range(72, 76)) + list(range(96, 144)) + list(range(240, 256)) + [224, 227, 264, 265],
+    0.5, "grass")
+convert_tiles("tileset_snowplains",
+    list(range(16, 48)) + list(range(344, 364)) + list(range(72, 76)) + list(range(96, 144)) + list(range(244, 248))
+    + [264, 265] + list(range(532, 535)) + list(range(553, 568)), 0.5, "snow")
+convert_tiles("tileset_cave",
+    list(range(16, 32)) + list(range(48, 56)) + list(range(132, 136)) + list(range(144, 154)) + [160, 161, 162, 163, 264, 265],
+    0.5, "cave")
+convert_tiles("tileset_ruins",
+    list(range(24, 32)) + list(range(105, 120)) + list(range(153, 167)) + list(range(186, 195)) + list(range(223, 235))
+    + list(range(241, 247)) + list(range(274, 279)) + list(range(289, 295)) + list(range(312, 318)) + [380, 381],
+    0.5, "ruins", os.path.join(sys.argv[1], "mods", "empyrean_campaign"))
+
+# --- Open world enemies ---
+for name in ["goblin", "goblin_elite", "antlion", "ice_ant", "fire_ant", "skeleton_weak"]:
+    convert_enemy(name, FIGHT, 0.42, 160, [80, 120])
+convert_enemy("wyvern_water", FIGHT + ["block"], 0.5, 256, [128, 190])
+
+# --- Flare music and sounds (CC-BY-SA 3.0): copied as they are ---
+import shutil
+SND = os.path.join(os.path.dirname(__file__), "..", "assets", "flare_audio")
+for sub in ["music", "soundfx", "soundfx/enemies", "soundfx/environment", "soundfx/steps", "soundfx/powers"]:
+    src = os.path.join(SRC, sub)
+    dst = os.path.join(SND, sub)
+    os.makedirs(dst, exist_ok=True)
+    for f in os.listdir(src):
+        if not f.endswith(".ogg") or f.startswith(("title", "town")):
+            continue
+        if sub == "music":  # re-encoded lighter for the web build (~64 kbit/s)
+            import subprocess
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", os.path.join(src, f),
+                            "-c:a", "libvorbis", "-q:a", "0", os.path.join(dst, f)], check=True)
+        else:
+            shutil.copy(os.path.join(src, f), os.path.join(dst, f))
+print("audio copied")

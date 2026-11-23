@@ -79,3 +79,9 @@ By Kenney (https://kenney.nl/assets/impact-sounds), public domain (CC0). No attr
 | `boss_phase2.ogg` | Boss Battle #8 [Metal] (loop) | nene | https://opengameart.org/content/boss-battle-8-metal (CC0) |
 
 Both are public domain (CC0); credited anyway.
+
+## Flare music and sounds (CC-BY-SA 3.0)
+
+The biome music (`assets/flare_audio/music/`), the ambience loops, footsteps,
+enemy and teleporter sounds (`assets/flare_audio/soundfx/`) come from Flare,
+CC-BY-SA 3.0: see [CREDITS-FLARE.md](CREDITS-FLARE.md).

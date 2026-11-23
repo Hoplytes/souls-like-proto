@@ -169,12 +169,24 @@ func _run() -> void:
 	log_lines.append("player hp %d stamina %d" % [p.hp, int(p.stamina)])
 	await _shield_test(p)
 	await _stick_test(p)
-	# Teleport to the arena entrance and wake the boss.
+	# A tour of every place of the teleport menu.
 	p.invulnerable = true
+	var places: Array = main.teleport_places()
+	for k in places.size():
+		main.teleport_to_cell(places[k][1], places[k][0])
+		await _wait(1.6)
+		await _shot("tour_%d" % k)
+		log_lines.append("tour %d %s: biome %s, music %s" % [k, places[k][0], main._biome, main.music.current_track])
+	main.teleport_to_cell(main.ARENAS.wyvern_water.center + Vector2(1.2, 1.2))
+	await _wait(2.0)
+	await _shot("tour_wyvern")
+	var wy = main._bosses.wyvern_water
+	log_lines.append("wyvern: state %d, sealed %s, pos %s player %s, sprite %s %s frames %d" % [wy.state, main._sealed.keys(), wy.global_position, p.global_position, wy.sprite.anim, wy.sprite._sprite.texture, wy.sprite.frame_count()])
+	# Teleport to the arena entrance and wake the boss.
 	p.global_position = main.arena_entry()
 	await _wait(0.3)
 	Input.action_press("move_up")
-	await _wait(0.5)
+	await _wait(1.2)
 	Input.action_release("move_up")
 	await _wait(0.8)
 	await _shot("06_boss_intro")
@@ -194,6 +206,7 @@ func _run() -> void:
 	log_lines.append("boss hp %d phase %d" % [main.boss.hp, main.boss.phase])
 	log_lines.append("music in phase 2: " + _music_state())
 	# A wide view of the whole level.
+	main._ended = true  # stops the game from moving the camera limits back
 	var cam: Camera2D = Fx.camera
 	cam.reparent(main)
 	cam.position_smoothing_enabled = false

@@ -10,13 +10,20 @@ Prototype de souls-like en vue isométrique, fait avec **Godot 4.5**.
 - **Créateur de personnage** au lancement : homme ou femme, tête, coiffe, torse, mains, jambes, pieds,
   arme (13 armes, 5 styles de combat), bouclier et teinte d'armure. Le héros est sauvegardé.
   **Échap** en jeu revient au créateur.
-- Un **donjon** : une grande salle éclairée par des braseros, gardée par des **squelettes** et des **zombies**,
-  avec un **feu de camp** (se reposer remet la santé et les fioles, et fait revenir les ennemis).
+- Un **monde ouvert** de 96 × 96 cases en quatre biomes, chacun avec sa musique, son ambiance sonore, sa lumière,
+  ses ennemis et son **feu de camp** (se reposer remet la santé et les fioles, fait revenir les ennemis et devient
+  le point de réapparition) :
+  - **Plaine de l'Aube** (sud, départ) : forêts, gobelins ;
+  - **Ruines d'Hélos** (ouest) : piliers, statues, squelettes et zombies ;
+  - **Crêtes gelées** (est) : neige, glace, fourmis des glaces, et la wyverne **Glacevive** ;
+  - **Grottes d'ambre** (nord) : stalagmites, fourmilions, fourmis de feu, et le portail du donjon.
+- Le **Labyrinthe d'Astérion**, un donjon éclairé par des braseros, atteint par un portail dans les grottes.
+- **Téléportation de test** : la touche **T** ouvre un menu vers tous les feux de camp et toutes les arènes de boss.
 - **Combat** : roulade avec frames d'invincibilité (culbute), endurance, attaques légères (combo x3) et
   lourdes (super-armure pendant le coup), **bouclier** (blocage, parade au bon moment, riposte à double dégâts),
   fioles de soin. Chaque famille d'armes a son rythme : dague, épée, hache, arme contondante, arme à deux mains.
-- Le boss **Astérion, le Minotaure** : grand coup de hache en arc, saut écrasant et charge, annoncés par une
-  zone rouge. Sous 50 % de vie, il entre en rage. Une barrière de lumière ferme l'arène au début du combat.
+- Deux boss, **Glacevive, la Wyverne des cimes** et **Astérion, le Minotaure** : grand coup de hache en arc, saut écrasant et charge, annoncés par une
+  zone rouge. Sous 50 % de vie, ils entrent en rage. Une barrière de lumière ferme l'arène au début du combat.
 
 ## Commandes
 
@@ -29,6 +36,7 @@ Prototype de souls-like en vue isométrique, fait avec **Godot 4.5**.
 | Attaque lourde | K ou clic droit | Y ou RT |
 | Boire une fiole | R | LT |
 | Se reposer au feu | E | A |
+| Téléportation (test) | T, puis un chiffre ou un clic | Select |
 | Aide | H | Start |
 | Revenir au créateur de personnage | Échap | |
 | Couper / remettre le son | M | |
@@ -42,12 +50,12 @@ Prototype de souls-like en vue isométrique, fait avec **Godot 4.5**.
 | `scripts/hero_config.gd` | Choix du héros (pièces, noms, sauvegarde dans `user://hero.json`) |
 | `scripts/avatar_sprite.gd` | Le héros modulaire : une couche par emplacement, ordonnées selon la direction |
 | `scripts/hd_sprite.gd` | Joue une planche en 8 directions (pièces du héros, ennemis, chevalier HD) |
-| `scripts/game.gd` | Le niveau (donjon isométrique) et le déroulement de la partie |
+| `scripts/game.gd` | Le monde ouvert (biomes, décors, donjon, portails, téléportation) et le déroulement de la partie |
 | `scripts/player.gd` | Le joueur : états, roulade, endurance, combos, bouclier, soin |
 | `scripts/weapons.gd` | **Les armes et leurs styles de combat, sous forme de données** |
 | `scripts/actor.gd` | Base commune : santé, poise (résistance), coups reçus, parade, riposte, mort |
-| `scripts/skeleton.gd` | Ennemi de base (squelette, zombie) |
-| `scripts/boss.gd` | Le boss et ses attaques |
+| `scripts/skeleton.gd` | Ennemis ordinaires (squelette, zombie, gobelin, fourmis…), un tableau de caractéristiques par type |
+| `scripts/boss.gd` | Les boss (Minotaure, wyverne) et leurs attaques |
 | `scripts/fx.gd`, `sfx.gd`, `music.gd` | Effets visuels, bruitages, musique |
 | `tools/convert_flare.py` | Convertit l'art de Flare (héros, ennemis, tuiles) |
 | `tools/make_sfx.py` | Synthétise les bruitages |
@@ -56,7 +64,7 @@ Prototype de souls-like en vue isométrique, fait avec **Godot 4.5**.
 
 ## Graphismes
 
-Héros, ennemis et donjon viennent de [Flare](https://github.com/flareteam/flare-game) (CC-BY-SA 3.0), des rendus
+Héros, ennemis et tuiles des biomes viennent de [Flare](https://github.com/flareteam/flare-game) (CC-BY-SA 3.0), des rendus
 3D en 8 directions, convertis par :
 
 ```bash
@@ -75,8 +83,11 @@ Deux jeux de sons, comparables en jeu avec la touche **N** :
   Kenney (CC0), dans `assets/sfx_cc0/` ; crédits dans [CREDITS-AUDIO.md](CREDITS-AUDIO.md) ;
 - **synthèse** : tous les sons générés par `tools/make_sfx.py` (`assets/sfx/`), sans licence à gérer.
 
-**Musique du boss** (`scripts/music.gd`) : *Battle Theme A* de cynicmusic pendant la première phase, puis
-*Boss Battle #8 [Metal]* de nene quand Astérion entre en rage (deux morceaux CC0).
+**Musiques, ambiances et bruitages de Flare** (CC-BY-SA 3.0, `assets/flare_audio/`) : un thème par biome, des boucles
+d'ambiance (oiseaux, corbeaux, vent, gouttes dans les grottes), les cris des ennemis et le portail.
+
+**Musique des boss** (`scripts/music.gd`) : *Battle Theme A* de cynicmusic pendant la première phase, puis
+*Boss Battle #8 [Metal]* de nene quand le boss entre en rage (deux morceaux CC0).
 
 ## Licences
 

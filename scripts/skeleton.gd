@@ -6,10 +6,23 @@ extends Actor
 
 enum State { IDLE, CHASE, WINDUP, ATTACK, RECOVER, STAGGER, DEAD }
 
-const SPEED := 52.0
-const AGGRO := 150.0
 const WINDUP := 0.5
 const RECOVER := 0.7
+## Per enemy type: health, damage, speed, sight, and the Flare sound prefix.
+const TYPES := {
+	"skeleton": {"hp": 70, "damage": 18, "speed": 52.0, "aggro": 150.0, "sound": "skeleton"},
+	"skeleton_weak": {"hp": 45, "damage": 13, "speed": 58.0, "aggro": 150.0, "sound": "skeleton"},
+	"zombie": {"hp": 90, "damage": 20, "speed": 40.0, "aggro": 130.0, "sound": "zombie"},
+	"goblin": {"hp": 50, "damage": 14, "speed": 66.0, "aggro": 170.0, "sound": "goblin"},
+	"goblin_elite": {"hp": 85, "damage": 20, "speed": 62.0, "aggro": 170.0, "sound": "goblin"},
+	"antlion": {"hp": 110, "damage": 24, "speed": 48.0, "aggro": 140.0, "sound": "antlion"},
+	"ice_ant": {"hp": 60, "damage": 16, "speed": 64.0, "aggro": 160.0, "sound": "antlion"},
+	"fire_ant": {"hp": 65, "damage": 18, "speed": 64.0, "aggro": 160.0, "sound": "antlion"},
+}
+
+var SPEED := 52.0
+var AGGRO := 150.0
+var _damage := 18
 
 var player: Player
 var kind := "sword"
@@ -24,7 +37,11 @@ var _wander := Vector2.ZERO
 var _stagger_time := 0.6
 
 func _ready() -> void:
-	max_hp = 70
+	var t: Dictionary = TYPES.get(flare_name, TYPES.skeleton)
+	max_hp = t.hp
+	_damage = t.damage
+	SPEED = t.speed
+	AGGRO = t.aggro
 	max_poise = 30.0
 	collision_layer = 4
 	collision_mask = 1 | 2 | 4
@@ -81,9 +98,9 @@ func _physics_process(delta: float) -> void:
 				sprite.modulate = Color.WHITE
 				var c := global_position + Vector2(0, -18)
 				if kind == "spear":
-					Hitbox.spawn(get_parent(), self, c + facing * 36, facing.angle(), "rect", Vector2(56, 14), 16, 1, 8, 0.12)
+					Hitbox.spawn(get_parent(), self, c + facing * 36, facing.angle(), "rect", Vector2(56, 14), _damage, 1, 8, 0.12)
 				else:
-					Hitbox.spawn(get_parent(), self, c + facing * 20, 0, "circle", Vector2(26, 0), 18, 1, 8, 0.12)
+					Hitbox.spawn(get_parent(), self, c + facing * 20, 0, "circle", Vector2(26, 0), _damage, 1, 8, 0.12)
 					Fx.slash_arc(get_parent(), c, facing.angle(), 34, Color(1, 0.5, 0.4))
 				Sfx.play(self, "skeleton_swing", global_position)
 		State.ATTACK:
@@ -139,13 +156,19 @@ func on_stagger() -> void:
 	sprite.play("idle", 0.0)
 	Fx.float_text(get_parent(), global_position + Vector2(0, -50), "Brisé !", Color(1, 0.8, 0.3))
 
+func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
+	var hit := super.take_hit(dmg, poise_dmg, from)
+	if hit and not dead and randf() < 0.6:
+		Sfx.flare(self, "enemies/%s_hit" % TYPES.get(flare_name, TYPES.skeleton).sound, global_position, -4.0)
+	return hit
+
 func on_hurt() -> void:
 	if state == State.IDLE:
 		_go(State.CHASE)
 
 func die() -> void:
 	state = State.DEAD
-	Sfx.play(self, "skeleton_death", global_position)
+	Sfx.flare(self, "enemies/%s_die" % TYPES.get(flare_name, TYPES.skeleton).sound, global_position)
 	sprite.modulate = Color.WHITE
 	super.die()
 	var t := create_tween()

@@ -9,7 +9,12 @@ signal phase_changed(phase: int)
 enum State { DORMANT, CHASE, THRUST_WINDUP, THRUST, LEAP_WINDUP, LEAP_AIR, CHARGE_WINDUP, CHARGE, RECOVER, STAGGER, DEAD }
 
 const SPEED := 48.0
-const BOSS_NAME := "Astérion, le Minotaure"
+## Bosses by Flare model: display name, Flare sound prefix and health.
+const MODELS := {
+	"minotaur": {"name": "Astérion, le Minotaure", "sound": "minotaur", "hp": 450},
+	"wyvern_water": {"name": "Glacevive, la Wyverne des cimes", "sound": "wyvern", "hp": 520},
+}
+var boss_name := "Astérion, le Minotaure"
 const CLEAVE_REACH := 40.0
 const CLEAVE_RADIUS := 46.0
 
@@ -27,7 +32,9 @@ var _recover_time := 0.9
 var _last_attack := ""
 
 func _ready() -> void:
-	max_hp = 450
+	var m: Dictionary = MODELS.get(flare_name, MODELS.minotaur)
+	boss_name = m.name
+	max_hp = m.hp
 	max_poise = 110.0
 	poise_regen = 8.0
 	body_height = 64.0
@@ -45,6 +52,7 @@ func activate() -> void:
 	if state == State.DORMANT:
 		_go(State.CHASE)
 		Sfx.play(self, "boss_roar", global_position, 2.0, 0.0)
+		Sfx.flare(self, "enemies/%s_phys" % MODELS.get(flare_name, MODELS.minotaur).sound, global_position, 2.0)
 
 func base_modulate() -> Color:
 	return Color(1.0, 0.9, 0.9) if phase == 1 else Color(1.3, 0.7, 0.7)
@@ -219,7 +227,7 @@ func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 		phase = 2
 		sprite.modulate = base_modulate()
 		Fx.ring(get_parent(), global_position, 10, 120, Color(1, 0.2, 0.2), 0.6, 4)
-		Fx.float_text(get_parent(), global_position + Vector2(0, -100), "Astérion entre en rage !", Color(1, 0.3, 0.3))
+		Fx.float_text(get_parent(), global_position + Vector2(0, -100), boss_name.get_slice(",", 0) + " entre en rage !", Color(1, 0.3, 0.3))
 		Fx.shake(8)
 		Sfx.play(self, "boss_rage", global_position, 3.0, 0.0)
 		phase_changed.emit(2)
@@ -253,6 +261,7 @@ func on_stagger() -> void:
 func die() -> void:
 	state = State.DEAD
 	Sfx.play(self, "boss_death", global_position, 3.0, 0.0)
+	Sfx.flare(self, "enemies/%s_die" % MODELS.get(flare_name, MODELS.minotaur).sound, global_position, 2.0)
 	sprite.position.y = 0
 	sprite.modulate = Color.WHITE
 	super.die()

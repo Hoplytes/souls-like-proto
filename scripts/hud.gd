@@ -66,7 +66,7 @@ func _draw() -> void:
 	if show_boss and boss:
 		var w := 360.0
 		var x := (vw - w) / 2
-		_text(Vector2(x, vh - 30), Boss.BOSS_NAME, 10, Color(0.9, 0.85, 0.75))
+		_text(Vector2(x, vh - 30), boss.boss_name, 10, Color(0.9, 0.85, 0.75))
 		_bar(Vector2(x, vh - 24), w, 5, float(boss.hp) / boss.max_hp, Color(0.65, 0.1, 0.08))
 	if hint != "":
 		_text(Vector2(0, vh * 0.68), hint, 9, Color(1, 0.95, 0.8), HORIZONTAL_ALIGNMENT_CENTER, vw)

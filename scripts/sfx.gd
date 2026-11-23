@@ -72,6 +72,30 @@ static func play(from: Node, name: String, pos: Variant = null, volume_db: float
 	p.finished.connect(p.queue_free)
 	p.play()
 
+## A Flare sound effect (assets/flare_audio/soundfx/), by its path there,
+## e.g. "enemies/goblin_die".
+static func flare(from: Node, name: String, pos: Variant = null, volume_db: float = 0.0, pitch_var: float = 0.06) -> void:
+	if from == null or not from.is_inside_tree():
+		return
+	var path := "res://assets/flare_audio/soundfx/%s.ogg" % name
+	if not ResourceLoader.exists(path):
+		return
+	var p: Node
+	if pos is Vector2:
+		var p2 := AudioStreamPlayer2D.new()
+		p2.max_distance = 520.0
+		p2.attenuation = 1.5
+		p2.position = pos
+		p = p2
+	else:
+		p = AudioStreamPlayer.new()
+	p.stream = stream(path)
+	p.volume_db = volume_db
+	p.pitch_scale = 1.0 + randf_range(-pitch_var, pitch_var)
+	from.get_tree().current_scene.add_child(p)
+	p.finished.connect(p.queue_free)
+	p.play()
+
 ## Background ambience (forest at night, or synthesised wind), looping.
 static func start_ambience(from: Node) -> void:
 	if _ambience == null or not is_instance_valid(_ambience):

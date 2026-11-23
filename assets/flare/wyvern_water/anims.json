@@ -1,0 +1,39 @@
+{
+ "cell": 256,
+ "feet": [
+  128,
+  190
+ ],
+ "anims": {
+  "stance": {
+   "frames": 8,
+   "ms": 800,
+   "type": "looped"
+  },
+  "run": {
+   "frames": 8,
+   "ms": 533,
+   "type": "looped"
+  },
+  "swing": {
+   "frames": 8,
+   "ms": 1066,
+   "type": "play_once"
+  },
+  "hit": {
+   "frames": 8,
+   "ms": 533,
+   "type": "play_once"
+  },
+  "die": {
+   "frames": 8,
+   "ms": 1066,
+   "type": "play_once"
+  },
+  "block": {
+   "frames": 2,
+   "ms": 200,
+   "type": "play_once"
+  }
+ }
+}

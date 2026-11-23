@@ -150,7 +150,7 @@ func _free(input: Vector2) -> void:
 		_step_t -= get_physics_process_delta_time()
 		if _step_t <= 0.0:
 			_step_t = 0.3
-			Sfx.play(self, "step", null, -8.0, 0.1)
+			Sfx.flare(self, "steps/step_%s%d" % [_step_kind(), randi_range(1, 4)], null, -10.0, 0.08)
 	else:
 		sprite.play("idle", 2.0)
 
@@ -195,9 +195,8 @@ func _start_roll(input: Vector2) -> void:
 	Sfx.play(self, "roll", null, -4.0)
 	Fx.dust(get_parent(), global_position, -_roll_dir)
 
-## The roll. The HD knight has a real animation; the modular hero tumbles:
-## a crouch, a full turn while tucked, then a landing. Sideways it spins,
-## up or down it squashes like a forward roll.
+## The roll. The HD knight has a real animation; the modular hero dashes
+## low: a crouch, two quick squashes while tucked, then a landing.
 func _roll(delta: float) -> void:
 	var k := _t / ROLL_TIME
 	velocity = _roll_dir * lerpf(300.0, 90.0, k * k)  # ~110 px
@@ -210,18 +209,13 @@ func _roll(delta: float) -> void:
 			_to_free()
 		return
 	var tumble := clampf((k - 0.12) / 0.68, 0.0, 1.0)  # 0..1 during the tucked part
-	var sideways := absf(_roll_dir.x) > absf(_roll_dir.y)
 	if k < 0.12:
 		sprite.scale = Vector2(1.1, 0.85)
 	elif k < 0.8:
 		sprite.position.y = -sprite.pivot + 4.0
-		if sideways:
-			sprite.rotation = signf(_roll_dir.x) * tumble * TAU
-			sprite.scale = Vector2(0.9, 0.9)
-		else:
-			var c := cos(tumble * TAU * 2.0)  # two quick flips read as a forward roll
-			sprite.scale = Vector2(1.05, 0.5 + 0.45 * absf(c))
-			sprite.position.x = sin(tumble * TAU) * 2.0
+		var c := cos(tumble * TAU * 2.0)  # two quick squashes read as a dashing tumble
+		sprite.scale = Vector2(1.05, 0.5 + 0.45 * absf(c))
+		sprite.position.x = sin(tumble * TAU) * 2.0
 	else:
 		_reset_sprite()
 		if k >= 0.92:
@@ -328,6 +322,16 @@ func _spawn_hitbox() -> void:
 		Fx.ring(get_parent(), pos + facing * _atk.size.x * 0.4, 2, 10, Color(1, 1, 1, 0.8), 0.12)
 
 # --- shield: block and parry ---------------------------------------------
+
+## Footsteps of the armour worn (Flare's cloth / leather / metal steps).
+func _step_kind() -> String:
+	var feet: String = HeroConfig.data.get("feet", "")
+	var chest: String = HeroConfig.data.get("chest", "")
+	if feet.begins_with("chain") or feet.begins_with("plate") or chest.begins_with("plate") or hd:
+		return "metal"
+	if feet.begins_with("leather"):
+		return "leather"
+	return "cloth"
 
 func _start_block() -> void:
 	state = State.BLOCK
