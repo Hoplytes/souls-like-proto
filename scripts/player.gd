@@ -21,7 +21,7 @@ const WALK_ANIM := 9.5
 ## Attacks follow the stick during the first part of the windup only.
 const ATTACK_TRACKING := 0.4
 const ROLL_TIME := 0.56
-const ROLL_IFRAMES := Vector2(0.04, 0.38)
+const ROLL_IFRAMES := Vector2(0.0, 0.43)  # from the first frame, 433 ms (Dark Souls 3 medium roll)
 ## Rolls by equipment load (Dark Souls' fast / medium / fat roll): distance
 ## factor and recovery (end of the roll where nothing can be done), in s.
 const ROLLS := {
@@ -302,7 +302,9 @@ func _soft_lock(input: Vector2) -> Vector2:
 	return (best.global_position - global_position).normalized() if best else facing
 
 func _start_attack(kind: String, input: Vector2) -> void:
-	_atk = Weapons.moves(weapon)[kind]
+	_atk = Weapons.moves(weapon)[kind].duplicate()
+	if _combo > 0:  # follow-ups of a combo come out quicker than the opener
+		_atk.windup *= 0.7
 	_atk_kind = kind
 	_spend(_atk.stamina)
 	facing = _soft_lock(input)
@@ -322,6 +324,10 @@ func _attack(_delta: float) -> void:
 	if _t < wu * ATTACK_TRACKING and stick != Vector2.ZERO:
 		_turn_toward(stick.normalized(), _delta)
 	if _t < wu:
+		# Immediate feedback (Bloodborne): the windup starts at once with a
+		# small step forward, even if the hit itself comes later.
+		if _t < wu * 0.5:
+			velocity = facing * 28.0
 		if _atk_kind == "heavy":
 			sprite.modulate = Color(1.0, 1.0, 1.0).lerp(Color(1.6, 1.4, 0.9), _t / wu)
 	elif _t < wu + ac:

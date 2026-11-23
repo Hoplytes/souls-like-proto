@@ -1,38 +1,40 @@
 class_name Weapons
 ## Weapons of the modular hero. Each belongs to a family that sets its
 ## moveset; times are in seconds. Two-handed weapons hit harder and slower
-## and leave no hand for a shield. Timings are deliberately weighty: once an
-## attack starts, the hero is committed to it (souls-like feel).
+## and leave no hand for a shield. Timings follow the Souls: the hero's
+## attacks arm about as slowly as the enemies' (~0.3-0.5 s for a light
+## attack, critpoints.net), so swinging into an enemy's windup is a risk;
+## once started, an attack is committed.
 
 const FAMILIES := {
 	"dagger": {
-		"light": {"windup": 0.11, "active": 0.08, "recovery": 0.19, "damage": 11, "poise": 5, "stamina": 9,
+		"light": {"windup": 0.24, "active": 0.08, "recovery": 0.19, "damage": 11, "poise": 5, "stamina": 9,
 			"shape": "circle", "size": Vector2(22, 0), "reach": 14, "step": 30},
-		"heavy": {"windup": 0.30, "active": 0.10, "recovery": 0.35, "damage": 24, "poise": 12, "stamina": 20,
+		"heavy": {"windup": 0.45, "active": 0.10, "recovery": 0.35, "damage": 24, "poise": 12, "stamina": 20,
 			"shape": "rect", "size": Vector2(40, 12), "reach": 26, "step": 120},
 	},
 	"sword": {
-		"light": {"windup": 0.16, "active": 0.10, "recovery": 0.27, "damage": 18, "poise": 12, "stamina": 15,
+		"light": {"windup": 0.30, "active": 0.10, "recovery": 0.27, "damage": 18, "poise": 12, "stamina": 15,
 			"shape": "circle", "size": Vector2(28, 0), "reach": 18, "step": 35},
-		"heavy": {"windup": 0.49, "active": 0.12, "recovery": 0.46, "damage": 36, "poise": 30, "stamina": 28,
+		"heavy": {"windup": 0.58, "active": 0.12, "recovery": 0.46, "damage": 36, "poise": 30, "stamina": 28,
 			"shape": "circle", "size": Vector2(34, 0), "reach": 20, "step": 70},
 	},
 	"axe": {
-		"light": {"windup": 0.20, "active": 0.10, "recovery": 0.32, "damage": 22, "poise": 18, "stamina": 18,
+		"light": {"windup": 0.34, "active": 0.10, "recovery": 0.32, "damage": 22, "poise": 18, "stamina": 18,
 			"shape": "circle", "size": Vector2(28, 0), "reach": 18, "step": 30},
-		"heavy": {"windup": 0.57, "active": 0.12, "recovery": 0.51, "damage": 44, "poise": 40, "stamina": 32,
+		"heavy": {"windup": 0.66, "active": 0.12, "recovery": 0.51, "damage": 44, "poise": 40, "stamina": 32,
 			"shape": "circle", "size": Vector2(34, 0), "reach": 20, "step": 60},
 	},
 	"blunt": {
-		"light": {"windup": 0.22, "active": 0.10, "recovery": 0.32, "damage": 18, "poise": 26, "stamina": 18,
+		"light": {"windup": 0.36, "active": 0.10, "recovery": 0.32, "damage": 18, "poise": 26, "stamina": 18,
 			"shape": "circle", "size": Vector2(26, 0), "reach": 16, "step": 25},
-		"heavy": {"windup": 0.61, "active": 0.12, "recovery": 0.54, "damage": 40, "poise": 55, "stamina": 34,
+		"heavy": {"windup": 0.70, "active": 0.12, "recovery": 0.54, "damage": 40, "poise": 55, "stamina": 34,
 			"shape": "circle", "size": Vector2(36, 0), "reach": 18, "step": 40},
 	},
 	"great": {
-		"light": {"windup": 0.30, "active": 0.12, "recovery": 0.41, "damage": 30, "poise": 30, "stamina": 24,
+		"light": {"windup": 0.44, "active": 0.12, "recovery": 0.41, "damage": 30, "poise": 30, "stamina": 24,
 			"shape": "circle", "size": Vector2(36, 0), "reach": 22, "step": 30},
-		"heavy": {"windup": 0.74, "active": 0.14, "recovery": 0.61, "damage": 60, "poise": 70, "stamina": 42,
+		"heavy": {"windup": 0.85, "active": 0.14, "recovery": 0.61, "damage": 60, "poise": 70, "stamina": 42,
 			"shape": "circle", "size": Vector2(44, 0), "reach": 24, "step": 60},
 	},
 }
