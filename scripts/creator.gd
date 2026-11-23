@@ -103,7 +103,7 @@ func _build_panel() -> void:
 	_info = Label.new()
 	_info.add_theme_font_size_override("font_size", 8)
 	_info.add_theme_color_override("font_color", Color(0.75, 0.7, 0.62))
-	_info.custom_minimum_size = Vector2(280, 22)
+	_info.custom_minimum_size = Vector2(280, 32)
 	_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	panel.add_child(_info)
 	var buttons := HBoxContainer.new()
@@ -154,6 +154,12 @@ func _randomize() -> void:
 	HeroConfig.data.head = HeroConfig.options("head")[randi() % HeroConfig.options("head").size()]
 	_refresh()
 
+const LOAD_TEXT := {
+	"light": ["légère", "rapide et longue"],
+	"medium": ["moyenne", "normale"],
+	"heavy": ["lourde", "courte, avec une longue reprise d'appui"],
+}
+
 func _refresh() -> void:
 	var knight: bool = HeroConfig.data.model == "hd_knight"
 	for i in _rows.size():
@@ -164,7 +170,8 @@ func _refresh() -> void:
 		row.modulate = Color(0.45, 0.45, 0.45) if greyed else (Color(1.15, 1.05, 0.85) if i == _sel else Color(0.85, 0.85, 0.85))
 	var w: String = HeroConfig.data.weapon
 	_info.text = "Chevalier HD : épée et bouclier, ses propres animations (roulade, blocage)." if knight \
-		else "%s — %s" % [Weapons.DATA[w].name, FAMILY_TEXT[Weapons.DATA[w].family]]
+		else "%s — %s\nArmure %s : roulade %s" % [Weapons.DATA[w].name, FAMILY_TEXT[Weapons.DATA[w].family],
+			LOAD_TEXT[Player.load_class(HeroConfig.data)][0], LOAD_TEXT[Player.load_class(HeroConfig.data)][1]]
 	if _preview:
 		_preview.queue_free()
 	if knight:

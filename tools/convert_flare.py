@@ -149,8 +149,18 @@ for name in ["goblin", "goblin_elite", "antlion", "ice_ant", "fire_ant", "skelet
     convert_enemy(name, FIGHT, 0.42, 160, [80, 120])
 convert_enemy("wyvern_water", FIGHT + ["block"], 0.5, 256, [128, 190])
 
-# --- Flare music and sounds (CC-BY-SA 3.0): copied as they are ---
-import shutil
+# --- Flare music and sounds (CC-BY-SA 3.0) ---
+import re, subprocess
+
+def normalize(src, dst, peak_db):
+    """Copies a sound with its peak brought to peak_db (Flare's footsteps and
+    ambiences are recorded some 30 dB lower than everything else)."""
+    out = subprocess.run(["ffmpeg", "-i", src, "-af", "volumedetect", "-f", "null", "-"],
+                         capture_output=True, text=True).stderr
+    gain = peak_db - float(re.search(r"max_volume: ([-0-9.]+)", out).group(1))
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", src, "-af", f"volume={gain:.1f}dB",
+                    "-c:a", "libvorbis", "-q:a", "4", dst], check=True)
+
 SND = os.path.join(os.path.dirname(__file__), "..", "assets", "flare_audio")
 for sub in ["music", "soundfx", "soundfx/enemies", "soundfx/environment", "soundfx/steps", "soundfx/powers"]:
     src = os.path.join(SRC, sub)
@@ -164,5 +174,5 @@ for sub in ["music", "soundfx", "soundfx/enemies", "soundfx/environment", "sound
             subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", os.path.join(src, f),
                             "-c:a", "libvorbis", "-q:a", "0", os.path.join(dst, f)], check=True)
         else:
-            shutil.copy(os.path.join(src, f), os.path.join(dst, f))
+            normalize(os.path.join(src, f), os.path.join(dst, f), -10.0 if "_loop" in f else -2.0)
 print("audio copied")

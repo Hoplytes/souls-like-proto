@@ -159,7 +159,7 @@ func on_stagger() -> void:
 func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 	var hit := super.take_hit(dmg, poise_dmg, from)
 	if hit and not dead and randf() < 0.6:
-		Sfx.flare(self, "enemies/%s_hit" % TYPES.get(flare_name, TYPES.skeleton).sound, global_position, -4.0)
+		Sfx.flare(self, "enemies/%s_hit" % TYPES.get(flare_name, TYPES.skeleton).sound, global_position, -8.0)
 	return hit
 
 func on_hurt() -> void:
@@ -168,7 +168,7 @@ func on_hurt() -> void:
 
 func die() -> void:
 	state = State.DEAD
-	Sfx.flare(self, "enemies/%s_die" % TYPES.get(flare_name, TYPES.skeleton).sound, global_position)
+	Sfx.flare(self, "enemies/%s_die" % TYPES.get(flare_name, TYPES.skeleton).sound, global_position, -6.0)
 	sprite.modulate = Color.WHITE
 	super.die()
 	var t := create_tween()

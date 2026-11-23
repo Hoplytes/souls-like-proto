@@ -25,7 +25,10 @@ func _press(action: String, hold: float = 0.08) -> void:
 	Input.action_release(action)
 
 ## Checks block, parry, riposte and an attack from behind with hand-made hits.
+const PARRY_WAIT := Player.PARRY_WINDOW + 0.15
+
 func _shield_test(p: Player) -> void:
+	await _wait(1.0)  # let the heavy attack before finish (attacks commit)
 	p.global_position = main.start_pos + Vector2(0, -110)
 	p.rest()
 	var sk := SkeletonEnemy.new()
@@ -33,6 +36,7 @@ func _shield_test(p: Player) -> void:
 	sk.position = p.global_position + Vector2(0, -30)
 	main.world.add_child(sk)
 	await _wait(0.3)
+	sk.process_mode = Node.PROCESS_MODE_DISABLED  # a target only: its own attacks would blur the test
 	var hits: Array[Hitbox] = []
 	var make_hit := func(src: Node2D) -> Hitbox:
 		var h := Hitbox.new()
@@ -47,7 +51,9 @@ func _shield_test(p: Player) -> void:
 	p.receive_hit(make_hit.call(sk))
 	log_lines.append("parry: player hp %d->%d, skeleton state %d (stagger=%d)" % [hp0, p.hp, sk.state, SkeletonEnemy.State.STAGGER])
 	await _shot("11_parry")
-	await _wait(0.4)
+	while p._t < PARRY_WAIT:  # game time, not real time (slow software rendering here)
+		await get_tree().physics_frame
+	log_lines.append("before block hit: state %d t %.2f invul %s timescale %.2f" % [p.state, p._t, p.invulnerable, Engine.time_scale])
 	var st0 := p.stamina
 	p.receive_hit(make_hit.call(sk))
 	log_lines.append("block: player hp %d, stamina %.0f->%.0f" % [p.hp, st0, p.stamina])

@@ -52,7 +52,7 @@ func activate() -> void:
 	if state == State.DORMANT:
 		_go(State.CHASE)
 		Sfx.play(self, "boss_roar", global_position, 2.0, 0.0)
-		Sfx.flare(self, "enemies/%s_phys" % MODELS.get(flare_name, MODELS.minotaur).sound, global_position, 2.0)
+		Sfx.flare(self, "enemies/%s_phys" % MODELS.get(flare_name, MODELS.minotaur).sound, global_position, 0.0)
 
 func base_modulate() -> Color:
 	return Color(1.0, 0.9, 0.9) if phase == 1 else Color(1.3, 0.7, 0.7)
@@ -261,7 +261,7 @@ func on_stagger() -> void:
 func die() -> void:
 	state = State.DEAD
 	Sfx.play(self, "boss_death", global_position, 3.0, 0.0)
-	Sfx.flare(self, "enemies/%s_die" % MODELS.get(flare_name, MODELS.minotaur).sound, global_position, 2.0)
+	Sfx.flare(self, "enemies/%s_die" % MODELS.get(flare_name, MODELS.minotaur).sound, global_position, 0.0)
 	sprite.position.y = 0
 	sprite.modulate = Color.WHITE
 	super.die()

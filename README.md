@@ -20,8 +20,10 @@ Flare est stocké à sa pleine résolution (`RES = 2` dans `tools/convert_flare.
   - **Grottes d'ambre** (nord) : stalagmites, fourmilions, fourmis de feu, et le portail du donjon.
 - Le **Labyrinthe d'Astérion**, un donjon éclairé par des braseros, atteint par un portail dans les grottes.
 - **Téléportation de test** : la touche **T** ouvre un menu vers tous les feux de camp et toutes les arènes de boss.
-- **Combat** au poids assumé : le héros prend de l'élan, tourne et s'arrête avec un temps de latence, et chaque
-  action engage (roulade avec courte reprise d'appui, attaques sans annulation avant la fin du coup). Roulade avec frames d'invincibilité (culbute), endurance, attaques légères (combo x3) et
+- **Combat** façon Souls : le déplacement répond tout de suite, mais chaque action engage. Une attaque ne s'oriente
+  qu'au début de son armement et ne s'annule qu'en fin de récupération ; une touche pressée pendant une action part à
+  sa fin. La **charge d'équipement** décide de la roulade (légère : longue et rapide ; lourde, en plaques : courte avec
+  une longue reprise d'appui). Roulade avec frames d'invincibilité (culbute), endurance, attaques légères (combo x3) et
   lourdes (super-armure pendant le coup), **bouclier** (blocage, parade au bon moment, riposte à double dégâts),
   fioles de soin. Chaque famille d'armes a son rythme : dague, épée, hache, arme contondante, arme à deux mains.
 - Deux boss, **Glacevive, la Wyverne des cimes** et **Astérion, le Minotaure** : grand coup de hache en arc, saut écrasant et charge, annoncés par une

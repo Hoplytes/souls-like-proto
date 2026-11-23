@@ -184,7 +184,7 @@ func _ready() -> void:
 	_torch.position = Vector2(0, -20)
 	player.add_child(_torch)
 	_ambience = AudioStreamPlayer.new()
-	_ambience.volume_db = -10.0
+	_ambience.volume_db = -8.0
 	add_child(_ambience)
 	music = Music.new()
 	add_child(music)

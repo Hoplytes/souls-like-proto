@@ -10,15 +10,25 @@ signal stats_changed
 enum State { FREE, ROLL, ATTACK, HEAL, BLOCK, STAGGER, DEAD }
 
 const SPEED := 95.0
-## Weight: the hero takes time to get going, to stop and to turn.
-const ACCEL := 420.0  # px/s² (full speed in ~0.23 s)
-const DECEL := 650.0
-const TURN_SPEED := 9.0  # rad/s
-## Walk cycle speed: fewer, longer steps for the same distance.
-const WALK_ANIM := 7.5
+## Souls-like feel: walking answers at once (almost no inertia); the weight
+## comes from committing to actions (attacks, rolls) that cannot be
+## cancelled early, and from the equipment load (heavier armour, heavier roll).
+const ACCEL := 1500.0  # px/s² (full speed in ~0.06 s)
+const DECEL := 1300.0
+const TURN_SPEED := 22.0  # rad/s: a quick pivot, not an instant flip
+## Walk cycle speed (frames played per second, before conversion to the sheet).
+const WALK_ANIM := 9.5
+## Attacks follow the stick during the first part of the windup only.
+const ATTACK_TRACKING := 0.4
 const ROLL_TIME := 0.56
 const ROLL_IFRAMES := Vector2(0.04, 0.38)
-const ROLL_RECOVERY := 0.16  # end of the roll where nothing can be done
+## Rolls by equipment load (Dark Souls' fast / medium / fat roll): distance
+## factor and recovery (end of the roll where nothing can be done), in s.
+const ROLLS := {
+	"light": {"distance": 1.08, "recovery": 0.10, "iframes": 1.1},
+	"medium": {"distance": 1.0, "recovery": 0.16, "iframes": 1.0},
+	"heavy": {"distance": 0.82, "recovery": 0.30, "iframes": 0.8},
+}
 const ROLL_COST := 22.0
 const STAMINA_REGEN := 45.0
 const STAMINA_DELAY := 0.5
@@ -54,6 +64,7 @@ var _guard_flash := 0.0
 var _step_t := 0.0
 ## True when the HD knight (licensed art in res://local/) is the chosen model.
 var hd := false
+var _roll_class := "medium"
 
 func make_sprite():
 	if hd:
@@ -72,6 +83,7 @@ func _ready() -> void:
 	collision_layer = 2
 	collision_mask = 1 | 4
 	setup_body([], 8, 7.0, 160)
+	_roll_class = "medium" if hd else load_class(HeroConfig.data)
 	sprite.pivot = 22.0  # rotate around the body's centre, for the roll
 	sprite.play("idle", 2.0)
 
@@ -100,7 +112,8 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_guard_flash = maxf(0.0, _guard_flash - delta)
 	sprite.facing8 = facing
-	invulnerable = (state == State.ROLL and _t > ROLL_IFRAMES.x and _t < ROLL_IFRAMES.y) or _hit_iframes > 0.0
+	var iframes_end: float = ROLL_IFRAMES.x + (ROLL_IFRAMES.y - ROLL_IFRAMES.x) * ROLLS[_roll_class].iframes
+	invulnerable = (state == State.ROLL and _t > ROLL_IFRAMES.x and _t < iframes_end) or _hit_iframes > 0.0
 	stats_changed.emit()
 
 func _read_buffer(delta: float) -> void:
@@ -108,7 +121,9 @@ func _read_buffer(delta: float) -> void:
 		if Input.is_action_just_pressed(a):
 			_buffer = a
 			_buffer_t = BUFFER_TIME
-	_buffer_t -= delta
+	# An input given during an attack or a roll waits for its end (Souls' buffer).
+	if state not in [State.ATTACK, State.ROLL]:
+		_buffer_t -= delta
 	if _buffer_t <= 0.0:
 		_buffer = ""
 
@@ -219,12 +234,13 @@ func _start_roll(input: Vector2) -> void:
 ## low: a crouch, two quick squashes while tucked, then a landing.
 func _roll(delta: float) -> void:
 	var k := minf(1.0, _t / ROLL_TIME)
+	var r: Dictionary = ROLLS[_roll_class]
 	if _t > ROLL_TIME:  # committed: a short recovery, slowing to a stop
-		velocity = _roll_dir * lerpf(60.0, 0.0, (_t - ROLL_TIME) / ROLL_RECOVERY)
-		if _t >= ROLL_TIME + ROLL_RECOVERY:
+		velocity = _roll_dir * lerpf(60.0, 0.0, (_t - ROLL_TIME) / r.recovery) * r.distance
+		if _t >= ROLL_TIME + r.recovery:
 			_to_free()
 		return
-	velocity = _roll_dir * lerpf(255.0, 80.0, k * k)  # ~110 px
+	velocity = _roll_dir * lerpf(255.0, 80.0, k * k) * r.distance  # ~110 px
 	if hd:  # the HD hero has a real roll animation
 		sprite.set_progress(k)
 		if k > 0.8 and not _landed:
@@ -301,6 +317,10 @@ func _attack(_delta: float) -> void:
 	var rc: float = _atk.recovery
 	velocity = Vector2.ZERO
 	sprite.set_progress(_t / (wu + ac + rc))
+	# Early in the windup the swing can still be aimed; then it is locked.
+	var stick := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	if _t < wu * ATTACK_TRACKING and stick != Vector2.ZERO:
+		_turn_toward(stick.normalized(), _delta)
 	if _t < wu:
 		if _atk_kind == "heavy":
 			sprite.modulate = Color(1.0, 1.0, 1.0).lerp(Color(1.6, 1.4, 0.9), _t / wu)
@@ -343,6 +363,21 @@ func _spawn_hitbox() -> void:
 		Fx.ring(get_parent(), pos + facing * _atk.size.x * 0.4, 2, 10, Color(1, 1, 1, 0.8), 0.12)
 
 # --- shield: block and parry ---------------------------------------------
+
+## Equipment load class, from the armour worn: plate = heavy, chain or
+## leather = medium, cloth or nothing = light. The HD knight is medium.
+static func load_class(cfg: Dictionary) -> String:
+	var heavy := 0
+	var medium := 0
+	for slot in ["chest", "legs", "feet", "hands", "helm"]:
+		var v: String = cfg.get(slot, "")
+		if v.begins_with("plate"):
+			heavy += 1
+		elif v.begins_with("chain") or v.begins_with("leather"):
+			medium += 1
+	if heavy >= 2:
+		return "heavy"
+	return "medium" if heavy + medium >= 2 else "light"
 
 ## Footsteps of the armour worn (Flare's cloth / leather / metal steps).
 func _step_kind() -> String:
