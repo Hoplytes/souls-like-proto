@@ -27,6 +27,42 @@ func _press(action: String, hold: float = 0.08) -> void:
 ## Checks block, parry, riposte and an attack from behind with hand-made hits.
 const PARRY_WAIT := Player.PARRY_WINDOW + 0.15
 
+func _lock_test(p: Player) -> void:
+	await _wait(0.8)
+	p.global_position = main.start_pos + Vector2(0, -110)
+	p.facing = Vector2.UP
+	var foes := []
+	for off in [Vector2(-60, -70), Vector2(70, -60)]:
+		var sk := SkeletonEnemy.new()
+		sk.player = p
+		sk.position = p.global_position + off
+		main.world.add_child(sk)
+		foes.append(sk)
+	await _wait(0.2)
+	for sk in foes:
+		sk.process_mode = Node.PROCESS_MODE_DISABLED
+	await _press("lock")
+	await _wait(0.2)
+	var first = p.lock_target
+	log_lines.append("lock: target %s (left one %s)" % [first != null, first == foes[0]])
+	Input.action_press("move_right")
+	await _wait(0.6)
+	Input.action_release("move_right")
+	var to: Vector2 = (first.global_position - p.global_position).normalized()
+	log_lines.append("strafe: facing·target %.2f, velocity x %.0f" % [p.facing.dot(to), p.velocity.x])
+	await _shot("13_lock")
+	await _press("lock_right")
+	await _wait(0.1)
+	log_lines.append("switch right: now the other one %s" % (p.lock_target == foes[1]))
+	p.lock_target.take_hit(9999, 0, p.global_position)
+	await _wait(0.2)
+	log_lines.append("target killed: relocked on the survivor %s" % (p.lock_target == foes[0]))
+	await _press("lock")
+	log_lines.append("unlocked %s" % (p.lock_target == null))
+	for sk in foes:
+		if is_instance_valid(sk):
+			sk.queue_free()
+
 func _shield_test(p: Player) -> void:
 	await _wait(1.0)  # let the heavy attack before finish (attacks commit)
 	p.global_position = main.start_pos + Vector2(0, -110)
@@ -175,6 +211,7 @@ func _run() -> void:
 	log_lines.append("player hp %d stamina %d" % [p.hp, int(p.stamina)])
 	await _shield_test(p)
 	await _stick_test(p)
+	await _lock_test(p)
 	# The pause menu, then the teleport menu.
 	main.open_pause_menu()
 	await _wait(0.3)

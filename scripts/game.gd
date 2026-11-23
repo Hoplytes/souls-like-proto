@@ -463,6 +463,7 @@ func _make_portal(at: Vector2, to: Vector2, label: String) -> void:
 
 ## Moves the hero, with a flash. Used by portals and the teleport menu.
 func teleport_to_cell(c: Vector2, label: String = "") -> void:
+	player._set_lock(null)
 	player.global_position = cell_of(c) + Vector2(0, 56)
 	player.velocity = Vector2.ZERO
 	cam.reset_smoothing()
@@ -803,6 +804,9 @@ static func setup_inputs() -> void:
 		"mute": [[KEY_M]],
 		"sound_set": [[KEY_N]],
 		"teleport": [[KEY_T]],
+		"lock": [[KEY_I], ["mouse", MOUSE_BUTTON_MIDDLE], ["btn", JOY_BUTTON_RIGHT_STICK]],
+		"lock_left": [[KEY_U], ["mouse", MOUSE_BUTTON_WHEEL_UP]],
+		"lock_right": [[KEY_O], ["mouse", MOUSE_BUTTON_WHEEL_DOWN]],
 		"map": [[KEY_TAB], ["btn", JOY_BUTTON_BACK]],
 	}
 	for action in map:

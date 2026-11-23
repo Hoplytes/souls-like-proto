@@ -65,6 +65,12 @@ var _step_t := 0.0
 ## True when the HD knight (licensed art in res://local/) is the chosen model.
 var hd := false
 var _roll_class := "medium"
+## Lock-on (Souls): the hero keeps facing the locked enemy and strafes around it.
+const LOCK_RANGE := 230.0  # px to pick a target
+const LOCK_BREAK := 320.0  # px at which the lock is lost
+var lock_target: Node2D
+var _lock_marker: LockMarker
+var _stick_flicked := false
 
 func make_sprite():
 	if hd:
@@ -84,6 +90,9 @@ func _ready() -> void:
 	collision_mask = 1 | 4
 	setup_body([], 8, 7.0, 160)
 	_roll_class = "medium" if hd else load_class(HeroConfig.data)
+	_lock_marker = LockMarker.new()
+	add_child(_lock_marker)
+	_lock_marker.top_level = true
 	sprite.pivot = 22.0  # rotate around the body's centre, for the roll
 	sprite.play("idle", 2.0)
 
@@ -97,6 +106,7 @@ func _physics_process(delta: float) -> void:
 	_read_buffer(delta)
 	_regen(delta)
 	_t += delta
+	_update_lock(delta)
 	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	match state:
 		State.FREE: _free(input)
@@ -159,7 +169,9 @@ func _to_free() -> void:
 
 func _free(input: Vector2) -> void:
 	var delta := get_physics_process_delta_time()
-	if input != Vector2.ZERO:
+	if lock_target:
+		_turn_toward(_to_target(), delta)
+	elif input != Vector2.ZERO:
 		_turn_toward(input.normalized(), delta)
 	var action := _take_buffer(["roll", "attack_light", "attack_heavy", "heal", "block"])
 	if _start_action(action, input):
@@ -169,7 +181,9 @@ func _free(input: Vector2) -> void:
 		return
 	# Momentum: speed builds up along the way the hero faces.
 	if input != Vector2.ZERO:
-		var target := facing * SPEED * minf(1.0, input.length())
+		# Locked: strafe where the stick points; free: walk where the hero faces.
+		var dir := input.normalized() if lock_target else facing
+		var target := dir * SPEED * minf(1.0, input.length())
 		velocity = velocity.move_toward(target, ACCEL * delta)
 	else:
 		velocity = velocity.move_toward(Vector2.ZERO, DECEL * delta)
@@ -288,6 +302,8 @@ func _spawn_ghost() -> void:
 # --- attacks -------------------------------------------------------------
 
 func _soft_lock(input: Vector2) -> Vector2:
+	if lock_target:
+		return _to_target()
 	if input != Vector2.ZERO:
 		return input.normalized()
 	var best: Node2D = null
@@ -321,7 +337,9 @@ func _attack(_delta: float) -> void:
 	sprite.set_progress(_t / (wu + ac + rc))
 	# Early in the windup the swing can still be aimed; then it is locked.
 	var stick := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	if _t < wu * ATTACK_TRACKING and stick != Vector2.ZERO:
+	if _t < wu * ATTACK_TRACKING and lock_target:
+		_turn_toward(_to_target(), _delta)
+	elif _t < wu * ATTACK_TRACKING and stick != Vector2.ZERO:
 		_turn_toward(stick.normalized(), _delta)
 	if _t < wu:
 		# Immediate feedback (Bloodborne): the windup starts at once with a
@@ -422,7 +440,7 @@ func _block_pose() -> void:
 func _block(input: Vector2) -> void:
 	velocity = input * SPEED * BLOCK_SPEED
 	# Keep the shield toward the closest enemy, so you can circle around it.
-	var e := _nearest_enemy(150.0)
+	var e: Node2D = lock_target if lock_target else _nearest_enemy(150.0)
 	if e:
 		facing = (e.global_position - global_position).normalized()
 	elif input != Vector2.ZERO:
@@ -436,6 +454,86 @@ func _block(input: Vector2) -> void:
 		_start_attack("light" if action == "attack_light" else "heavy", input)
 	elif not Input.is_action_pressed("block") and _t > 0.1:
 		_to_free()
+
+# --- lock-on ---------------------------------------------------------------
+
+func _to_target() -> Vector2:
+	var d := lock_target.global_position - global_position
+	return d.normalized() if d.length() > 1.0 else facing
+
+func _lockable(e: Node) -> bool:
+	return is_instance_valid(e) and not e.dead and e.is_inside_tree() and e.visible \
+		and global_position.distance_to(e.global_position) < LOCK_RANGE
+
+## The enemy to lock: the closest, favouring the ones in front of the hero
+## (or, to switch, the next one on the given side of the current target).
+func _pick_target(side: int = 0) -> Node2D:
+	var best: Node2D = null
+	var best_score := INF
+	var ref := _to_target() if lock_target else facing
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not _lockable(e) or e == lock_target:
+			continue
+		var to: Vector2 = e.global_position - global_position
+		var score := to.length() * (1.6 - 0.6 * ref.dot(to.normalized()))
+		if side != 0:
+			var turn := ref.angle_to(to)  # > 0: clockwise on screen = to the right
+			if signf(turn) != side:
+				continue
+			score = absf(turn) * 100.0 + to.length() * 0.2
+		if score < best_score:
+			best_score = score
+			best = e
+	return best
+
+func toggle_lock() -> void:
+	if lock_target:
+		_set_lock(null)
+	else:
+		var t := _pick_target()
+		if t:
+			_set_lock(t)
+		else:
+			# Like the Souls: no enemy around, the camera simply recentres.
+			Fx.camera.position = Vector2(0, -20)
+
+func _set_lock(t: Node2D) -> void:
+	lock_target = t
+	_lock_marker.target = t
+	if t:
+		Sfx.play(self, "block", null, -18.0, 0.0)
+
+func _update_lock(delta: float) -> void:
+	if Input.is_action_just_pressed("lock"):
+		toggle_lock()
+	var side := 0
+	if Input.is_action_just_pressed("lock_right"):
+		side = 1
+	elif Input.is_action_just_pressed("lock_left"):
+		side = -1
+	var rx := Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
+	if absf(rx) > 0.7 and not _stick_flicked:
+		_stick_flicked = true
+		side = int(signf(rx))
+	elif absf(rx) < 0.3:
+		_stick_flicked = false
+	if side != 0 and lock_target:
+		var t := _pick_target(side)
+		if t:
+			_set_lock(t)
+	if lock_target and (not is_instance_valid(lock_target) or lock_target.dead
+			or global_position.distance_to(lock_target.global_position) > LOCK_BREAK):
+		# The target died or got away: lock the next enemy around, if any.
+		var was := lock_target
+		lock_target = null
+		var next := _pick_target() if is_instance_valid(was) and was.dead else null
+		_set_lock(next)
+	# The camera leans toward the locked enemy to keep both in view.
+	if Fx.camera and Fx.camera.get_parent() == self:
+		var want := Vector2(0, -20)
+		if lock_target:
+			want += (lock_target.global_position - global_position) * 0.35
+		Fx.camera.position = Fx.camera.position.lerp(want, 1.0 - exp(-6.0 * delta))
 
 func _nearest_enemy(radius: float) -> Node2D:
 	var best: Node2D = null
@@ -540,6 +638,7 @@ func on_stagger() -> void:
 	sprite.play("stagger", 15.0 / 0.35 * 6.0 / 15.0, false, true)
 
 func die() -> void:
+	_set_lock(null)
 	state = State.DEAD
 	Sfx.play(self, "player_death", null, 0.0, 0.0)
 	sprite.modulate = Color.WHITE

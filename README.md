@@ -23,7 +23,9 @@ Flare est stocké à sa pleine résolution (`RES = 2` dans `tools/convert_flare.
 - **Combat** façon Souls : le déplacement répond tout de suite, mais chaque action engage. Une attaque ne s'oriente
   qu'au début de son armement et ne s'annule qu'en fin de récupération ; une touche pressée pendant une action part à
   sa fin. La **charge d'équipement** décide de la roulade (légère : longue et rapide ; lourde, en plaques : courte avec
-  une longue reprise d'appui). Roulade avec frames d'invincibilité (culbute), endurance, attaques légères (combo x3) et
+  une longue reprise d'appui). **Verrouillage** comme dans les Souls : le héros fait face à la cible, se
+  déplace en pas chassés autour d'elle, la caméra cadre les deux, et la cible suivante est prise si la première meurt.
+  Roulade avec frames d'invincibilité (culbute), endurance, attaques légères (combo x3) et
   lourdes (super-armure pendant le coup), **bouclier** (blocage, parade au bon moment, riposte à double dégâts),
   fioles de soin. Chaque famille d'armes a son rythme : dague, épée, hache, arme contondante, arme à deux mains.
 - Deux boss, **Glacevive, la Wyverne des cimes** et **Astérion, le Minotaure** : grand coup de hache en arc, saut écrasant et charge, annoncés par une
@@ -39,6 +41,8 @@ Flare est stocké à sa pleine résolution (`RES = 2` dans `tools/convert_flare.
 | Attaque légère | J ou clic gauche | X ou RB |
 | Attaque lourde | K ou clic droit | Y ou RT |
 | Boire une fiole | R | LT |
+| Verrouiller un ennemi / lâcher | I ou clic molette | R3 (clic du stick droit) |
+| Changer de cible verrouillée | U / O ou molette | Stick droit gauche / droite |
 | Se reposer au feu | E | A |
 | Carte | Tab | Select |
 | Téléportation (test) | T, puis un chiffre ou un clic | (menu pause) |
