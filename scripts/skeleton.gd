@@ -1,9 +1,8 @@
 class_name SkeletonEnemy
 extends Actor
-## Undead hoplite: a skeleton in rusted armour with a round shield. It
-## wanders, chases the player, telegraphs its attack, then leaves a recovery
-## window to punish. Two kinds: "sword" (wide slash) and "spear" (long
-## thrust from further away).
+## Basic melee enemy (Flare skeleton or zombie): wanders, chases the player,
+## telegraphs its attack, then leaves a recovery window to punish.
+## kind "spear" thrusts from further away; "sword" swings wide.
 
 enum State { IDLE, CHASE, WINDUP, ATTACK, RECOVER, STAGGER, DEAD }
 
@@ -15,7 +14,7 @@ const RECOVER := 0.7
 var player: Player
 var kind := "sword"
 ## A Flare enemy to draw instead of the LPC hoplite (isometric prototype).
-var flare_name := ""
+var flare_name := "skeleton"
 var state := State.IDLE
 var home := Vector2.ZERO
 var facing := Vector2.DOWN
@@ -31,21 +30,17 @@ func _ready() -> void:
 	collision_mask = 1 | 2 | 4
 	add_to_group("enemies")
 	hit_sound = "hit_bone"
-	var w := "spear" if kind == "spear" else "sword"
-	setup_body(["res://assets/sprites/%s_bg.png" % w, "res://assets/sprites/skeleton_hoplite.png",
-		"res://assets/sprites/round_shield.png", "res://assets/sprites/%s_fg.png" % w], 16)
+	setup_body([], 16)
 	home = global_position
-	if flare_name != "":
-		shadow_size = Vector2.ZERO
+	shadow_size = Vector2.ZERO  # Flare sprites draw their own shadow
 	sprite.play("idle", 2.0)
 
 func make_sprite():
-	return HdSprite.flare(flare_name) if flare_name != "" else LpcSprite.new()
+	return HdSprite.flare(flare_name)
 
 func _physics_process(delta: float) -> void:
 	queue_redraw()
-	if flare_name != "":
-		sprite.facing8 = facing
+	sprite.facing8 = facing
 	if dead:
 		velocity = apply_knockback(delta)
 		move_and_slide()
@@ -73,7 +68,6 @@ func _physics_process(delta: float) -> void:
 			elif dist < _range() and _cooldown <= 0.0:
 				facing = to_p.normalized()
 				_go(State.WINDUP)
-				sprite.set_dir(LpcSprite.dir_from_vector(facing))
 				sprite.play(_anim(), 0.0, false, true)
 			else:
 				_move(to_p.normalized() * SPEED)
@@ -127,7 +121,6 @@ func _move(v: Vector2) -> void:
 	velocity = v
 	if v.length() > 1.0:
 		facing = v.normalized()
-		sprite.set_dir(LpcSprite.dir_from_vector(facing))
 		sprite.play("walk", 9.0)
 	else:
 		sprite.play("idle", 2.0)

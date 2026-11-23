@@ -39,8 +39,12 @@ def parse(path):
     return anims
 
 def convert_enemy(name, wanted, scale, cell, feet):
-    anims = parse(os.path.join(SRC, "animations", "enemies", name + ".txt"))
-    os.makedirs(os.path.join(OUT, name), exist_ok=True)
+    convert(os.path.join(SRC, "animations", "enemies", name + ".txt"), os.path.join(OUT, name), wanted, scale, cell, feet)
+
+def convert(txt, out_dir, wanted, scale, cell, feet):
+    name = os.path.basename(out_dir)
+    anims = parse(txt)
+    os.makedirs(out_dir, exist_ok=True)
     meta = {"cell": cell, "feet": feet, "anims": {}}
     for anim in wanted:
         a = anims[anim]
@@ -59,10 +63,10 @@ def convert_enemy(name, wanted, scale, cell, feet):
             px = idx * cell + feet[0] - round(ox * scale)
             py = row * cell + feet[1] - round(oy * scale)
             sheet.alpha_composite(piece, (px, py)) if px >= 0 and py >= 0 else sheet.paste(piece, (px, py), piece)
-        sheet.save(os.path.join(OUT, name, anim + ".png"), optimize=True)
+        sheet.save(os.path.join(out_dir, anim + ".png"), optimize=True)
         meta["anims"][anim] = {"frames": n, "ms": a.get("ms", 500), "type": a.get("type", "looped")}
-    json.dump(meta, open(os.path.join(OUT, name, "anims.json"), "w"), indent=1)
-    print("enemy", name, list(meta["anims"]))
+    json.dump(meta, open(os.path.join(out_dir, "anims.json"), "w"), indent=1)
+    return meta
 
 def convert_tiles(tileset, ids, scale):
     path = os.path.join(SRC, "tilesetdefs", tileset + ".txt")
@@ -86,6 +90,27 @@ def convert_tiles(tileset, ids, scale):
     print("tiles", len(ids))
 
 FIGHT = ["stance", "run", "swing", "hit", "die"]
+
+# --- The modular hero (character creator) ------------------------------------
+# Melee gear only (bows, staffs and wands need ranged combat, not built yet).
+HERO_ANIMS = ["stance", "run", "swing", "block", "hit", "die"]
+SKIP = {"greatbow", "longbow", "shortbow", "slingshot", "greatstaff", "staff", "rod", "wand"}
+
+def convert_avatar(sex):
+    folder = os.path.join(SRC, "animations", "avatar", sex)
+    pieces = sorted(f[:-4] for f in os.listdir(folder) if f.endswith(".txt") and f[:-4] not in SKIP
+                    and not open(os.path.join(folder, f)).read().startswith("INCLUDE"))
+    # (female_dark only redraws the pieces that show skin; the game falls
+    # back to the female pieces for the others.)
+    for piece in pieces:
+        convert(os.path.join(folder, piece + ".txt"), os.path.join(OUT, "avatar", sex, piece), HERO_ANIMS, 0.42, 160, [80, 120])
+    print("avatar", sex, len(pieces), "pieces")
+    return pieces
+
+if "--avatar-only" in sys.argv:
+    for sex in ["male", "female", "female_dark"]:
+        convert_avatar(sex)
+    sys.exit()
 convert_enemy("skeleton", FIGHT + ["block"], 0.42, 160, [80, 120])
 convert_enemy("zombie", FIGHT, 0.42, 160, [80, 120])
 convert_enemy("minotaur", FIGHT + ["block"], 0.55, 256, [128, 190])

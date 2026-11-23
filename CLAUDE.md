@@ -9,10 +9,11 @@
   about 3 minutes). Remind the user to reload with Ctrl+F5 after an update.
 - Godot 4.5, GDScript. Smoke test with screenshots:
   `xvfb-run -a godot --rendering-driver opengl3 -- --autotest=<folder>`
+  (the game starts in the character creator; test runs skip it)
   (see `tools/autotest.gd`).
 - Licensed (paid) art lives in the PRIVATE repo Hoplytes/souls-like-assets,
   checked out into `local/` (git-ignored here) by the web build using the
   `ASSETS_TOKEN` secret. Never commit licensed files to this public repo.
-- Art comes from LPC (`tools/compose_lpc.py`, `tools/extract_env.py`), sounds
-  are synthesised (`tools/make_sfx.py`) or CC0 / CC BY: keep the CREDITS-*.md
+- Art comes from Flare (CC-BY-SA 3.0, `tools/convert_flare.py`), sounds are
+  synthesised (`tools/make_sfx.py`) or CC0 / CC BY: keep the CREDITS-*.md
   files up to date when adding assets.

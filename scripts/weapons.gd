@@ -1,27 +1,60 @@
 class_name Weapons
-## Weapon definitions. Adding a weapon = adding an entry here (plus its LPC
-## sheets). Times are in seconds; "frames" splits the attack animation into
-## windup / active / recovery frames.
+## Weapons of the modular hero. Each belongs to a family that sets its
+## moveset; times are in seconds. Two-handed weapons hit harder and slower
+## and leave no hand for a shield.
 
-const DATA := {
-	"sword": {
-		"name": "Épée courte",
-		"anim": "slash",
-		"frames": [3, 5],  # frames 0-2 windup, 3-4 active, 5 recovery
-		"layers": ["res://assets/sprites/sword_bg.png", "res://assets/sprites/sword_fg.png"],
-		"light": {"windup": 0.13, "active": 0.10, "recovery": 0.22, "damage": 20, "poise": 14,
-			"stamina": 16, "shape": "circle", "size": Vector2(30, 0), "reach": 20, "step": 40},
-		"heavy": {"windup": 0.40, "active": 0.12, "recovery": 0.38, "damage": 40, "poise": 35,
-			"stamina": 30, "shape": "circle", "size": Vector2(38, 0), "reach": 22, "step": 80},
+const FAMILIES := {
+	"dagger": {
+		"light": {"windup": 0.08, "active": 0.08, "recovery": 0.14, "damage": 11, "poise": 5, "stamina": 9,
+			"shape": "circle", "size": Vector2(22, 0), "reach": 14, "step": 30},
+		"heavy": {"windup": 0.22, "active": 0.10, "recovery": 0.26, "damage": 24, "poise": 12, "stamina": 20,
+			"shape": "rect", "size": Vector2(40, 12), "reach": 26, "step": 120},
 	},
-	"spear": {
-		"name": "Lance",
-		"anim": "thrust",
-		"frames": [4, 6],  # frames 0-3 windup, 4-5 active, 6-7 recovery
-		"layers": ["res://assets/sprites/spear_bg.png", "res://assets/sprites/spear_fg.png"],
-		"light": {"windup": 0.15, "active": 0.10, "recovery": 0.20, "damage": 16, "poise": 9,
-			"stamina": 13, "shape": "rect", "size": Vector2(62, 16), "reach": 40, "step": 20},
-		"heavy": {"windup": 0.34, "active": 0.20, "recovery": 0.36, "damage": 32, "poise": 26,
-			"stamina": 28, "shape": "rect", "size": Vector2(70, 18), "reach": 44, "step": 170},
+	"sword": {
+		"light": {"windup": 0.12, "active": 0.10, "recovery": 0.20, "damage": 18, "poise": 12, "stamina": 15,
+			"shape": "circle", "size": Vector2(28, 0), "reach": 18, "step": 35},
+		"heavy": {"windup": 0.36, "active": 0.12, "recovery": 0.34, "damage": 36, "poise": 30, "stamina": 28,
+			"shape": "circle", "size": Vector2(34, 0), "reach": 20, "step": 70},
+	},
+	"axe": {
+		"light": {"windup": 0.15, "active": 0.10, "recovery": 0.24, "damage": 22, "poise": 18, "stamina": 18,
+			"shape": "circle", "size": Vector2(28, 0), "reach": 18, "step": 30},
+		"heavy": {"windup": 0.42, "active": 0.12, "recovery": 0.38, "damage": 44, "poise": 40, "stamina": 32,
+			"shape": "circle", "size": Vector2(34, 0), "reach": 20, "step": 60},
+	},
+	"blunt": {
+		"light": {"windup": 0.16, "active": 0.10, "recovery": 0.24, "damage": 18, "poise": 26, "stamina": 18,
+			"shape": "circle", "size": Vector2(26, 0), "reach": 16, "step": 25},
+		"heavy": {"windup": 0.45, "active": 0.12, "recovery": 0.40, "damage": 40, "poise": 55, "stamina": 34,
+			"shape": "circle", "size": Vector2(36, 0), "reach": 18, "step": 40},
+	},
+	"great": {
+		"light": {"windup": 0.22, "active": 0.12, "recovery": 0.30, "damage": 30, "poise": 30, "stamina": 24,
+			"shape": "circle", "size": Vector2(36, 0), "reach": 22, "step": 30},
+		"heavy": {"windup": 0.55, "active": 0.14, "recovery": 0.45, "damage": 60, "poise": 70, "stamina": 42,
+			"shape": "circle", "size": Vector2(44, 0), "reach": 24, "step": 60},
 	},
 }
+
+const DATA := {
+	"dagger": {"name": "Dague", "family": "dagger"},
+	"shortsword": {"name": "Épée courte", "family": "sword"},
+	"longsword": {"name": "Épée longue", "family": "sword"},
+	"greatsword": {"name": "Espadon", "family": "great", "two_handed": true},
+	"zweihander": {"name": "Zweihänder", "family": "great", "two_handed": true},
+	"hand_axe": {"name": "Hachette", "family": "axe"},
+	"battle_axe": {"name": "Hache de bataille", "family": "great", "two_handed": true},
+	"infantry_axe": {"name": "Hache d'infanterie", "family": "axe"},
+	"club": {"name": "Gourdin", "family": "blunt"},
+	"reinforced_club": {"name": "Gourdin clouté", "family": "blunt"},
+	"mace": {"name": "Masse", "family": "blunt"},
+	"smith_hammer": {"name": "Marteau de forge", "family": "blunt"},
+	"war_hammer": {"name": "Marteau de guerre", "family": "great", "two_handed": true},
+	"maul": {"name": "Maillet", "family": "great", "two_handed": true},
+}
+
+static func moves(weapon: String) -> Dictionary:
+	return FAMILIES[DATA[weapon].family]
+
+static func two_handed(weapon: String) -> bool:
+	return DATA[weapon].get("two_handed", false)

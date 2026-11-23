@@ -1,7 +1,7 @@
-# Credits: Flare art (isometric prototype)
+# Credits: Flare art
 
-The dungeon tiles, skeletons, zombies and the Minotaur of the isometric
-prototype come from **Flare** (Free Libre Action Roleplaying Engine),
+The hero's equipment pieces (character creator), the dungeon tiles, the
+skeletons, zombies and the Minotaur come from **Flare** (Free Libre Action Roleplaying Engine),
 https://github.com/flareteam/flare-game — licensed **CC-BY-SA 3.0**
 (https://creativecommons.org/licenses/by-sa/3.0/).
 

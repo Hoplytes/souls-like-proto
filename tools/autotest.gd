@@ -131,14 +131,7 @@ func _run() -> void:
 	var p: Player = main.player
 	await _wait(1.0)
 	await _shot("01_start")
-	var hd0 := p.hd
-	await _press("switch_hero")
-	await _wait(0.2)
-	log_lines.append("hero switch: hd %s -> %s" % [hd0, p.hd])
-	await _shot("01b_switched")
-	await _press("switch_hero")
-	await _wait(0.2)
-	log_lines.append("hero switch back: hd %s" % p.hd)
+	log_lines.append("hero: %s, weapon %s" % ["HD knight" if p.hd else "modular", p.weapon])
 	# Walk up to the first skeleton and fight it.
 	Input.action_press("move_up")
 	await _wait(1.6)
@@ -170,7 +163,6 @@ func _run() -> void:
 		await _wait(0.6)
 	p.global_position = back
 	await _wait(0.3)
-	await _press("switch_weapon")
 	await _press("attack_heavy")
 	await _wait(0.4)
 	await _shot("05_spear_heavy")

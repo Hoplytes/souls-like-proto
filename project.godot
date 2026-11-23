@@ -5,7 +5,7 @@ config_version=5
 
 config/name="Souls-like Proto"
 config/description="Prototype de combat souls-like en vue de dessus, pixel art."
-run/main_scene="res://scenes/title.tscn"
+run/main_scene="res://scenes/creator.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 
 [display]
@@ -37,3 +37,10 @@ environment/defaults/default_clear_color=Color(0.05, 0.05, 0.07, 1)
 2d_physics/layer_3="enemy"
 2d_physics/layer_4="player_hurtbox"
 2d_physics/layer_5="enemy_hurtbox"
+
+[importer_defaults]
+
+texture={
+"compress/lossy_quality": 0.85,
+"compress/mode": 1
+}

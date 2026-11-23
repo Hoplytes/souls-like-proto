@@ -4,7 +4,7 @@ extends Node2D
 ## 8 rows = E, SE, S, SW, W, NW, N, NE. Used for the HD hero (SmallScaleInt,
 ## 15 frames, in res://local/, licensed art never published) and, through
 ## flare(), for the Flare enemies of the isometric prototype.
-## It answers the same calls as LpcSprite, so the actor code can drive
+## It answers the same calls as AvatarSprite, so the actor code can drive
 ## either; set `facing8` every frame for the 8-way direction.
 
 signal finished(anim: String)
@@ -55,8 +55,8 @@ static func flare(name: String) -> HdSprite:
 	s.folder = "res://assets/flare/%s/" % name
 	var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(s.folder + "anims.json"))
 	s.feet_point = Vector2(meta.feet[0], meta.feet[1])
-	s.sheets = {"idle": "stance", "walk": "run", "slash": "swing", "thrust": "swing", "hurt": "die",
-		"stagger": "hit", "block": "block", "jump": "run"}
+	s.sheets = {"idle": "stance", "walk": "run", "slash": "swing", "slash_heavy": "swing", "thrust": "swing",
+		"hurt": "die", "stagger": "hit", "block": "block", "block_start": "block", "jump": "run", "heal": "stance"}
 	for a in meta.anims:
 		s.frames_of[a] = int(meta.anims[a].frames)
 	s._textures.clear()  # _init cached the HD hero's idle sheet

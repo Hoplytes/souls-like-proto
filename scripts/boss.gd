@@ -8,7 +8,6 @@ signal phase_changed(phase: int)
 
 enum State { DORMANT, CHASE, THRUST_WINDUP, THRUST, LEAP_WINDUP, LEAP_AIR, CHARGE_WINDUP, CHARGE, RECOVER, STAGGER, DEAD }
 
-const SCALE := 1.6
 const SPEED := 48.0
 const BOSS_NAME := "Astérion, le Minotaure"
 const CLEAVE_REACH := 40.0
@@ -16,7 +15,7 @@ const CLEAVE_RADIUS := 46.0
 
 var player: Player
 ## A Flare enemy to draw instead of the LPC Minotaur (isometric prototype).
-var flare_name := ""
+var flare_name := "minotaur"
 var state := State.DORMANT
 var phase := 1
 var facing := Vector2.DOWN
@@ -37,12 +36,8 @@ func _ready() -> void:
 	collision_mask = 1 | 2
 	add_to_group("enemies")
 	hit_sound = "hit_heavy"
-	setup_body(["res://assets/sprites/minotaur_back.png", "res://assets/sprites/waraxe_bg.png",
-		"res://assets/sprites/minotaur.png", "res://assets/sprites/waraxe_fg.png"], 16, 11.0, 192)
-	if flare_name != "":
-		shadow_size = Vector2.ZERO
-	else:
-		sprite.scale = Vector2.ONE * SCALE
+	setup_body([], 16, 11.0, 192)
+	shadow_size = Vector2.ZERO  # Flare sprites draw their own shadow
 	sprite.modulate = base_modulate()
 	sprite.play("idle", 1.5)
 
@@ -58,12 +53,11 @@ func _speed_mult() -> float:
 	return 1.0 if phase == 1 else 0.72  # shorter windups in phase 2
 
 func make_sprite():
-	return HdSprite.flare(flare_name) if flare_name != "" else LpcSprite.new()
+	return HdSprite.flare(flare_name)
 
 func _physics_process(delta: float) -> void:
 	queue_redraw()
-	if flare_name != "":
-		sprite.facing8 = facing
+	sprite.facing8 = facing
 	if dead or state == State.DORMANT:
 		velocity = apply_knockback(delta)
 		move_and_slide()
@@ -163,7 +157,6 @@ func _physics_process(delta: float) -> void:
 
 func _choose_attack(to_p: Vector2, dist: float) -> void:
 	facing = to_p.normalized()
-	sprite.set_dir(LpcSprite.dir_from_vector(facing))
 	var options: Array[String] = []
 	if dist < 80:
 		options = ["thrust", "thrust", "leap"]
@@ -190,7 +183,6 @@ func _choose_attack(to_p: Vector2, dist: float) -> void:
 
 func _start_thrust() -> void:
 	facing = (player.global_position - global_position).normalized()
-	sprite.set_dir(LpcSprite.dir_from_vector(facing))
 	_go(State.THRUST_WINDUP)
 	sprite.play("slash", 0.0, false, true)
 	Fx.zone(get_parent(), global_position + facing * CLEAVE_REACH, 0, "circle", Vector2(CLEAVE_RADIUS, 0), 0.65 * _speed_mult())
@@ -211,7 +203,6 @@ func _walk(v: Vector2) -> void:
 	velocity = v
 	if v.length() > 1.0:
 		facing = v.normalized()
-		sprite.set_dir(LpcSprite.dir_from_vector(facing))
 		sprite.play("walk", 7.0)
 	else:
 		sprite.play("idle", 1.5)
