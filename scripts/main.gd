@@ -1,6 +1,8 @@
 extends Node2D
 ## Builds the prototype level: a ruined path guarded by skeletons, a
 ## bonfire checkpoint and the arena of Asterion the Minotaur.
+## The isometric prototype (iso_main.gd) extends this script and replaces
+## the steps marked "level step".
 
 const WORLD := Rect2(0, 0, 1200, 1500)
 const ARENA_C := Vector2(600, 330)
@@ -20,36 +22,35 @@ var _ended := false
 var _skeletons: Array = []
 var music: Music
 
+var world_rect := WORLD
+var start_pos := START
+var arena_center := ARENA_C
+var arena_radius := ARENA_R
+var skeleton_spots: Array = SKELETONS
+
 func _ready() -> void:
 	_setup_inputs()
-	var ground := Node2D.new()
-	ground.set_script(load("res://scripts/ground.gd"))
-	ground.world_rect = WORLD
-	ground.arena_center = ARENA_C
-	ground.arena_radius = ARENA_R
-	ground.path_points = PackedVector2Array(PATH)
-	ground.clearings = [[START + Vector2(0, -20), 64], [Vector2(560, 950), 70], [Vector2(620, 780), 60]]
-	add_child(ground)
+	_build_ground()
 
 	world = Node2D.new()
 	world.y_sort_enabled = true
 	add_child(world)
 
 	bonfire = Bonfire.new()
-	bonfire.position = START + Vector2(0, -30)
+	bonfire.position = start_pos + Vector2(0, -30)
 	world.add_child(bonfire)
 
 	player = Player.new()
-	player.position = START
+	player.position = start_pos
 	world.add_child(player)
 	var cam := Camera2D.new()
 	cam.position = Vector2(0, -20)
 	cam.position_smoothing_enabled = true
 	cam.position_smoothing_speed = 7.0
-	cam.limit_left = int(WORLD.position.x)
-	cam.limit_top = int(WORLD.position.y)
-	cam.limit_right = int(WORLD.end.x)
-	cam.limit_bottom = int(WORLD.end.y)
+	cam.limit_left = int(world_rect.position.x)
+	cam.limit_top = int(world_rect.position.y)
+	cam.limit_right = int(world_rect.end.x)
+	cam.limit_bottom = int(world_rect.end.y)
 	player.add_child(cam)
 	Fx.camera = cam
 	player.died.connect(_on_player_died)
@@ -57,18 +58,13 @@ func _ready() -> void:
 	_build_level()
 	_spawn_skeletons()
 
-	boss = Boss.new()
-	boss.position = ARENA_C + Vector2(0, -60)
+	boss = _make_boss()
 	boss.player = player
 	world.add_child(boss)
 	boss.died.connect(_on_boss_died)
 	boss.phase_changed.connect(func(_p): music.play("boss_phase2", 2.5))
 
-	var cm := CanvasModulate.new()
-	cm.color = Color(0.74, 0.7, 0.82)  # dusk
-	add_child(cm)
-
-	_add_leaves(cam)
+	_atmosphere(cam)
 	Sfx.start_ambience(self)
 	music = Music.new()
 	add_child(music)
@@ -107,6 +103,45 @@ func _ready() -> void:
 			t.out = a.trim_prefix("--autotest=")
 			add_child(t)
 
+## Level step: the ground under everything.
+func _build_ground() -> void:
+	var ground := Node2D.new()
+	ground.set_script(load("res://scripts/ground.gd"))
+	ground.world_rect = WORLD
+	ground.arena_center = ARENA_C
+	ground.arena_radius = ARENA_R
+	ground.path_points = PackedVector2Array(PATH)
+	ground.clearings = [[START + Vector2(0, -20), 64], [Vector2(560, 950), 70], [Vector2(620, 780), 60]]
+	add_child(ground)
+
+## Level step: the boss and where it waits.
+func _make_boss() -> Boss:
+	var b := Boss.new()
+	b.position = ARENA_C + Vector2(0, -60)
+	return b
+
+## Level step: lighting and weather.
+func _atmosphere(cam: Camera2D) -> void:
+	var cm := CanvasModulate.new()
+	cm.color = Color(0.74, 0.7, 0.82)  # dusk
+	add_child(cm)
+	_add_leaves(cam)
+
+## Level step: one enemy of the patrol.
+func _make_skeleton(i: int) -> SkeletonEnemy:
+	var s := SkeletonEnemy.new()
+	s.kind = "spear" if i % 2 == 1 else "sword"
+	return s
+
+## A point just outside the arena, on the way in (used by tests).
+func arena_entry() -> Vector2:
+	return ARENA_C + Vector2(0, ARENA_R * 0.65)
+
+## Level step: is this point inside the boss arena (where the gate closes)?
+func _in_arena(p: Vector2) -> bool:
+	return p.distance_to(ARENA_C) < ARENA_R - 30
+
+## Level step: scenery, walls and props.
 func _build_level() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 42
@@ -260,10 +295,9 @@ func _spawn_skeletons() -> void:
 		if is_instance_valid(s):
 			s.queue_free()
 	_skeletons.clear()
-	for i in SKELETONS.size():
-		var s := SkeletonEnemy.new()
-		s.kind = "spear" if i % 2 == 1 else "sword"
-		s.position = SKELETONS[i]
+	for i in skeleton_spots.size():
+		var s := _make_skeleton(i)
+		s.position = skeleton_spots[i]
 		s.player = player
 		world.add_child(s)
 		_skeletons.append(s)
@@ -281,8 +315,10 @@ func _physics_process(delta: float) -> void:
 		Fx.ring(world, bonfire.global_position, 4, 60, Color(1, 0.7, 0.3), 0.6)
 		hud.flash_message("Feu allumé", Color(1, 0.75, 0.35), "Santé et fioles restaurées. Les ennemis sont revenus.")
 		get_tree().create_timer(2.0).timeout.connect(func(): if not _ended: hud.message = "")
-	if not _gate_closed and player.global_position.distance_to(ARENA_C) < ARENA_R - 30:
+	if not _gate_closed and _in_arena(player.global_position):
 		_close_gate()
+	if Input.is_action_just_pressed("ui_cancel"):
+		get_tree().change_scene_to_file("res://scenes/title.tscn")
 	if Input.is_action_just_pressed("help"):
 		hud.show_help = not hud.show_help
 	if Input.is_action_just_pressed("switch_hero"):
@@ -294,6 +330,15 @@ func _physics_process(delta: float) -> void:
 
 func _close_gate() -> void:
 	_gate_closed = true
+	_seal_arena()
+	boss.activate()
+	music.play("boss_phase1", 1.0)
+	hud.show_boss = true
+	hud.flash_message(Boss.BOSS_NAME, Color(0.9, 0.8, 0.6))
+	get_tree().create_timer(2.0).timeout.connect(func(): if not _ended: hud.message = "")
+
+## Level step: block the way out of the arena.
+func _seal_arena() -> void:
 	# The gate collapses: a column falls across the way out.
 	for spot in [[Vector2(0, ARENA_R + 14), "marble_fallen"], [Vector2(-40, ARENA_R + 22), "marble_drum"], [Vector2(38, ARENA_R + 24), "rock_low"]]:
 		var r := Prop.make(world, spot[1], ARENA_C + spot[0])
@@ -303,11 +348,6 @@ func _close_gate() -> void:
 	Fx.shake(6)
 	Sfx.play(self, "rocks_fall", null, 0.0, 0.0)
 	Sfx.play(self, "rocks", null, 0.0)
-	boss.activate()
-	music.play("boss_phase1", 1.0)
-	hud.show_boss = true
-	hud.flash_message(Boss.BOSS_NAME, Color(0.9, 0.8, 0.6))
-	get_tree().create_timer(2.0).timeout.connect(func(): if not _ended: hud.message = "")
 
 func _on_player_died() -> void:
 	_ended = true

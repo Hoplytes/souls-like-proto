@@ -1,6 +1,8 @@
 # Souls-like Proto
 
-Prototype de combat souls-like en vue de dessus, en pixel art, fait avec **Godot 4.5**.
+Prototype de combat souls-like, fait avec **Godot 4.5**. L'écran titre propose deux niveaux :
+- **Vue de dessus** : un chemin de ruines et l'arène du Minotaure dans un temple grec (art LPC) ;
+- **Isométrique** : un donjon avec squelettes, zombies et le Minotaure (art de Flare, en rendus 3D).
 
 **Jouer dans le navigateur :** https://hoplytes.github.io/souls-like-proto/
 (la page se met à jour automatiquement à chaque modification poussée sur `main`).
@@ -28,6 +30,7 @@ Prototype de combat souls-like en vue de dessus, en pixel art, fait avec **Godot
 | Changer d'arme | Tab | Select |
 | Se reposer au feu | E | A |
 | Aide | H | Start |
+| Revenir à l'écran titre | Échap | |
 | Couper / remettre le son | M | |
 | Sons enregistrés ↔ sons de synthèse | N | |
 | Spartiate ↔ chevalier HD (si installé) | C | |
@@ -77,7 +80,17 @@ python3 tools/lpc_credits.py <chemin-du-dépôt-LPC>/CREDITS.csv
 python3 tools/extract_env.py <chemin-du-dépôt-LPC-Revised>
 ```
 
+## Niveau isométrique
+
+`scripts/iso_main.gd` reprend tout le gameplay du niveau vue de dessus (`scripts/main.gd`) et ne remplace que
+la construction du niveau. Les tuiles et ennemis viennent de [Flare](https://github.com/flareteam/flare-game)
+(CC-BY-SA 3.0), convertis par `python3 tools/convert_flare.py <dépôt flare-game>`. Le héros HD (8 directions) vient
+du dépôt privé des assets sous licence ; sans lui, c'est le Spartiate qui joue.
+
+Tests : `godot -- --autotest=<dossier> --iso` pour le niveau isométrique.
+
 ## Licences
 
 Les sprites LPC sont sous licences libres (OGA-BY 3.0, CC-BY-SA 3.0 ou GPL 3.0 selon les pièces) :
-voir [CREDITS-LPC.md](CREDITS-LPC.md). Les décors sont sous licence OGA-BY 3.0 : voir [CREDITS-ENV.md](CREDITS-ENV.md). Ces crédits doivent accompagner le jeu s'il est distribué.
+voir [CREDITS-LPC.md](CREDITS-LPC.md). Les décors sont sous licence OGA-BY 3.0 : voir [CREDITS-ENV.md](CREDITS-ENV.md). L'art du niveau isométrique
+est sous CC-BY-SA 3.0 : voir [CREDITS-FLARE.md](CREDITS-FLARE.md). Ces crédits doivent accompagner le jeu s'il est distribué.

@@ -15,6 +15,8 @@ const CLEAVE_REACH := 40.0
 const CLEAVE_RADIUS := 46.0
 
 var player: Player
+## A Flare enemy to draw instead of the LPC Minotaur (isometric prototype).
+var flare_name := ""
 var state := State.DORMANT
 var phase := 1
 var facing := Vector2.DOWN
@@ -37,7 +39,10 @@ func _ready() -> void:
 	hit_sound = "hit_heavy"
 	setup_body(["res://assets/sprites/minotaur_back.png", "res://assets/sprites/waraxe_bg.png",
 		"res://assets/sprites/minotaur.png", "res://assets/sprites/waraxe_fg.png"], 16, 11.0, 192)
-	sprite.scale = Vector2.ONE * SCALE
+	if flare_name != "":
+		shadow_size = Vector2.ZERO
+	else:
+		sprite.scale = Vector2.ONE * SCALE
 	sprite.modulate = base_modulate()
 	sprite.play("idle", 1.5)
 
@@ -52,8 +57,13 @@ func base_modulate() -> Color:
 func _speed_mult() -> float:
 	return 1.0 if phase == 1 else 0.72  # shorter windups in phase 2
 
+func make_sprite():
+	return HdSprite.flare(flare_name) if flare_name != "" else LpcSprite.new()
+
 func _physics_process(delta: float) -> void:
 	queue_redraw()
+	if flare_name != "":
+		sprite.facing8 = facing
 	if dead or state == State.DORMANT:
 		velocity = apply_knockback(delta)
 		move_and_slide()

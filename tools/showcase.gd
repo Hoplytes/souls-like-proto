@@ -37,7 +37,7 @@ func _run() -> void:
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if e is SkeletonEnemy:
 			e.queue_free()
-	p.global_position = Vector2(600, 1180)
+	p.global_position = main.start_pos + Vector2(0, -180)
 	await _wait(0.8)
 	_recording = true
 	for d in ["move_down", "move_right", "move_up", "move_left"]:

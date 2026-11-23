@@ -14,6 +14,8 @@ const RECOVER := 0.7
 
 var player: Player
 var kind := "sword"
+## A Flare enemy to draw instead of the LPC hoplite (isometric prototype).
+var flare_name := ""
 var state := State.IDLE
 var home := Vector2.ZERO
 var facing := Vector2.DOWN
@@ -33,10 +35,17 @@ func _ready() -> void:
 	setup_body(["res://assets/sprites/%s_bg.png" % w, "res://assets/sprites/skeleton_hoplite.png",
 		"res://assets/sprites/round_shield.png", "res://assets/sprites/%s_fg.png" % w], 16)
 	home = global_position
+	if flare_name != "":
+		shadow_size = Vector2.ZERO
 	sprite.play("idle", 2.0)
+
+func make_sprite():
+	return HdSprite.flare(flare_name) if flare_name != "" else LpcSprite.new()
 
 func _physics_process(delta: float) -> void:
 	queue_redraw()
+	if flare_name != "":
+		sprite.facing8 = facing
 	if dead:
 		velocity = apply_knockback(delta)
 		move_and_slide()

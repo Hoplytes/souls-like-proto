@@ -26,7 +26,7 @@ func _press(action: String, hold: float = 0.08) -> void:
 
 ## Checks block, parry, riposte and an attack from behind with hand-made hits.
 func _shield_test(p: Player) -> void:
-	p.global_position = Vector2(600, 1250)
+	p.global_position = main.start_pos + Vector2(0, -110)
 	p.rest()
 	var sk := SkeletonEnemy.new()
 	sk.player = p
@@ -93,7 +93,7 @@ func _stick_test(p: Player) -> void:
 	await _wait(0.1)
 	for case in [["adjacent", Vector2(0, -16)], ["overlapping", Vector2(2, -3)], ["two around", Vector2(-14, -8)],
 			["side", Vector2(-16, 0)], ["side+attacks", Vector2(-16, 0)], ["blocking", Vector2(0, -16)]]:
-		p.global_position = Vector2(600, 1200)
+		p.global_position = main.start_pos + Vector2(0, -160)
 		p.rest()
 		var group: Array = []
 		var offsets: Array = [case[1]] if case[0] != "two around" else [Vector2(-14, -8), Vector2(14, -8)]
@@ -155,7 +155,7 @@ func _run() -> void:
 	await _wait(1.0)
 	# Roll sideways and downwards in a clear spot, capturing the tumble.
 	var back := p.global_position
-	p.global_position = Vector2(600, 1250)
+	p.global_position = main.start_pos + Vector2(0, -110)
 	await _wait(0.6)
 	for dir in ["move_right", "move_down"]:
 		var start := p.global_position
@@ -179,7 +179,7 @@ func _run() -> void:
 	await _stick_test(p)
 	# Teleport to the arena entrance and wake the boss.
 	p.invulnerable = true
-	p.global_position = main.ARENA_C + Vector2(0, 150)
+	p.global_position = main.arena_entry()
 	await _wait(0.3)
 	Input.action_press("move_up")
 	await _wait(0.5)
@@ -189,6 +189,8 @@ func _run() -> void:
 	log_lines.append("music after boss intro: " + _music_state())
 	await _wait(1.2)
 	await _shot("07_boss_attack")
+	var bs = main.boss.sprite
+	log_lines.append("boss sprite: anim %s frame %d tex %s vis %s pos %s scale %s mod %s state %d boss_pos %s player %s" % [bs.anim, bs.get_frame(), bs._sprite.texture.resource_path if bs is HdSprite and bs._sprite.texture else "-", bs.visible, bs.position, bs.scale, bs.modulate, main.boss.state, main.boss.global_position, p.global_position])
 	await _wait(0.6)
 	await _shot("08_boss_attack2")
 	# Damage the boss to phase 2.
@@ -199,6 +201,18 @@ func _run() -> void:
 	await _shot("10_phase2_attack")
 	log_lines.append("boss hp %d phase %d" % [main.boss.hp, main.boss.phase])
 	log_lines.append("music in phase 2: " + _music_state())
+	# A wide view of the whole level.
+	var cam: Camera2D = Fx.camera
+	cam.reparent(main)
+	cam.position_smoothing_enabled = false
+	cam.limit_left = -100000
+	cam.limit_top = -100000
+	cam.limit_right = 100000
+	cam.limit_bottom = 100000
+	cam.global_position = main.world_rect.get_center()
+	cam.zoom = Vector2.ONE * minf(640.0 / main.world_rect.size.x, 360.0 / main.world_rect.size.y)
+	await _wait(0.3)
+	await _shot("99_overview")
 	var f := FileAccess.open(out.path_join("log.txt"), FileAccess.WRITE)
 	f.store_string("\n".join(log_lines))
 	get_tree().quit()
