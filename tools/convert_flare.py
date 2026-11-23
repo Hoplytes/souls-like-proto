@@ -10,6 +10,11 @@ from PIL import Image
 
 SRC = os.path.join(sys.argv[1], "mods", "fantasycore")
 OUT = os.path.join(os.path.dirname(__file__), "..", "assets", "flare")
+# Detail factor: the game draws its world at 640x360 units but renders at the
+# screen's resolution (1280x720 and more), so art is stored at RES times the
+# size it takes in the world, and drawn at 1/RES (the "res" key of the
+# metadata tells the game).
+RES = 2
 
 def parse(path):
     anims, cur, images = {}, None, {}
@@ -43,9 +48,10 @@ def convert_enemy(name, wanted, scale, cell, feet):
 
 def convert(txt, out_dir, wanted, scale, cell, feet):
     name = os.path.basename(out_dir)
+    scale, cell, feet = scale * RES, cell * RES, [f * RES for f in feet]
     anims = parse(txt)
     os.makedirs(out_dir, exist_ok=True)
-    meta = {"cell": cell, "feet": feet, "anims": {}}
+    meta = {"cell": cell, "feet": feet, "res": RES, "anims": {}}
     for anim in wanted:
         a = anims[anim]
         cache = {}
@@ -81,7 +87,8 @@ def convert_tiles(defs, ids, scale, out_name, root=SRC):
             tiles[v[0]] = v[1:] + [img]
     out = os.path.join(OUT, "tiles", out_name)
     os.makedirs(out, exist_ok=True)
-    meta = {}
+    scale *= RES
+    meta = {"res": RES}
     for t in ids:
         x, y, w, h, ox, oy, im = tiles[t]
         piece = im.crop((x, y, x + w, y + h)).resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)

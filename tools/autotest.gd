@@ -169,6 +169,17 @@ func _run() -> void:
 	log_lines.append("player hp %d stamina %d" % [p.hp, int(p.stamina)])
 	await _shield_test(p)
 	await _stick_test(p)
+	# The pause menu, then the teleport menu.
+	main.open_pause_menu()
+	await _wait(0.3)
+	await _shot("menu_pause")
+	main.open_teleport_menu()
+	await _wait(0.3)
+	await _shot("menu_teleport")
+	log_lines.append("paused %s" % get_tree().paused)
+	main._close_menu()
+	await _wait(0.2)
+	log_lines.append("after close: paused %s" % get_tree().paused)
 	# A tour of every place of the teleport menu.
 	p.invulnerable = true
 	var places: Array = main.teleport_places()
@@ -182,6 +193,9 @@ func _run() -> void:
 	await _shot("tour_wyvern")
 	var wy = main._bosses.wyvern_water
 	log_lines.append("wyvern: state %d, sealed %s, pos %s player %s, sprite %s %s frames %d" % [wy.state, main._sealed.keys(), wy.global_position, p.global_position, wy.sprite.anim, wy.sprite._sprite.texture, wy.sprite.frame_count()])
+	wy.take_hit(9999, 0, wy.global_position + Vector2(0, 30))
+	await _wait(4.5)
+	log_lines.append("wyvern dead %s, sealed %s, defeated %s" % [wy.dead, main._sealed.keys(), main.defeated])
 	# Teleport to the arena entrance and wake the boss.
 	p.global_position = main.arena_entry()
 	await _wait(0.3)

@@ -1,9 +1,10 @@
 {
- "cell": 160,
+ "cell": 320,
  "feet": [
-  80,
-  120
+  160,
+  240
  ],
+ "res": 2,
  "anims": {
   "stance": {
    "frames": 4,

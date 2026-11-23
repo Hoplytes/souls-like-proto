@@ -97,7 +97,7 @@ var _modulate: CanvasModulate
 var _torch: PointLight2D
 var _ended := false
 var _active_t := 0.0
-var _teleport_menu: CanvasLayer
+var _menu: GameMenu
 
 # The old single-level names, used by the test scripts.
 var start_pos := Vector2.ZERO
@@ -139,6 +139,8 @@ func _ready() -> void:
 		world.add_child(b)
 		var wood := _tile("grass", 102, Vector2(0, 2), b)
 		wood.show_behind_parent = true
+		var fire := _tile("dungeon", 167, Vector2(0, -2), b)  # the brazier's flames
+		fire.scale *= 0.8
 		var glow := PointLight2D.new()
 		glow.texture = _light_texture()
 		glow.color = Color(1.0, 0.65, 0.3)
@@ -151,7 +153,7 @@ func _ready() -> void:
 	_make_portal(PORTAL_OUT, PORTAL_IN + Vector2(1.5, 1.5), "Grottes d'ambre")
 
 	player = Player.new()
-	player.position = cell_of(PLACES[spawn_place].cell) + Vector2(0, 30)
+	player.position = cell_of(PLACES[spawn_place].cell) + Vector2(0, 56)
 	world.add_child(player)
 	cam = Camera2D.new()
 	cam.position = Vector2(0, -20)
@@ -200,6 +202,7 @@ func _tile(tileset: String, id: int, at: Vector2, parent: Node, z: int = 0) -> S
 	s.centered = false
 	var a: Array = _anchors[tileset][str(id)]
 	s.offset = -Vector2(a[0], a[1])
+	s.scale = Vector2.ONE / float(_anchors[tileset].get("res", 1))
 	s.position = at
 	s.z_index = z
 	parent.add_child(s)
@@ -224,13 +227,14 @@ func _build_floor_layer() -> void:
 	var ts := TileSet.new()
 	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
 	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_DOWN
-	ts.tile_size = Vector2i(int(TW), int(TH))
+	var res := float(_anchors.grass.get("res", 1))  # tiles are stored at res x their size
+	ts.tile_size = Vector2i(int(TW * res), int(TH * res))
 	var floors := {"grass": [[16, 47]], "ruins": [[24, 31], [105, 119], [153, 166]], "snow": [[16, 47], [344, 363]],
 		"cave": [[16, 31], [48, 55]], "dungeon": [[16, 19], [22, 23], [26, 26], [29, 47], [60, 63]]}
 	for tileset in floors:
 		for r in floors[tileset]:
 			for id in range(r[0], r[1] + 1):
-				if not _anchors[tileset].has(str(id)):
+				if not _anchors[tileset].has(str(id)) or str(id) == "res":
 					continue
 				var tex: Texture2D = load("res://assets/flare/tiles/%s/%d.png" % [tileset, id])
 				var src := TileSetAtlasSource.new()
@@ -241,8 +245,9 @@ func _build_floor_layer() -> void:
 	_floor = TileMapLayer.new()
 	_floor.tile_set = ts
 	_floor.z_index = -10
+	_floor.scale = Vector2.ONE / res
 	add_child(_floor)
-	_floor.position = cell_pos(0.5, 0.5) - _floor.map_to_local(Vector2i.ZERO)
+	_floor.position = cell_pos(0.5, 0.5) - _floor.map_to_local(Vector2i.ZERO) / res
 
 func _set_floor(i: int, j: int, tileset: String, id: int) -> void:
 	_floor.set_cell(Vector2i(i, j), _sources["%s:%d" % [tileset, id]], Vector2i.ZERO)
@@ -444,7 +449,7 @@ func _make_portal(at: Vector2, to: Vector2, label: String) -> void:
 
 ## Moves the hero, with a flash. Used by portals and the teleport menu.
 func teleport_to_cell(c: Vector2, label: String = "") -> void:
-	player.global_position = cell_of(c) + Vector2(0, 34)
+	player.global_position = cell_of(c) + Vector2(0, 56)
 	player.velocity = Vector2.ZERO
 	cam.reset_smoothing()
 	Fx.ring(world, player.global_position, 4, 40, Color(0.6, 0.7, 1.0), 0.5)
@@ -553,10 +558,10 @@ func _physics_process(delta: float) -> void:
 		if is_instance_valid(b) and not b.dead and not _sealed.has(model) \
 				and _arena_dist(player.global_position, model) < ARENAS[model].radius - 0.8:
 			_close_arena(model)
-	if Input.is_action_just_pressed("teleport"):
-		_toggle_teleport_menu()
-	if Input.is_action_just_pressed("ui_cancel") and _teleport_menu == null:
-		get_tree().change_scene_to_file("res://scenes/creator.tscn")
+	if Input.is_action_just_pressed("teleport") and not player.dead:
+		open_teleport_menu()
+	if Input.is_action_just_pressed("pause") and not player.dead:
+		open_pause_menu()
 	if Input.is_action_just_pressed("help"):
 		hud.show_help = not hud.show_help
 	if Input.is_action_just_pressed("sound_set"):
@@ -686,67 +691,59 @@ func teleport_places() -> Array:
 		out.append([ARENAS[model].label + (" (vaincu)" if defeated.has(model) else ""), ARENAS[model].entry])
 	return out
 
-func _toggle_teleport_menu() -> void:
-	if _teleport_menu:
-		_close_teleport_menu()
-		return
+func _open_menu(title: String, items: Array, footer: String = "") -> void:
+	if _menu:
+		_menu.queue_free()
+	get_tree().paused = true
+	_menu = GameMenu.open(self, title, items, footer)
+	_menu.closed.connect(func():
+		_menu = null
+		get_tree().paused = false)
+
+func _close_menu() -> void:
+	if _menu:
+		_menu.close()
+
+## Esc / Start: the pause menu.
+func open_pause_menu() -> void:
+	var muted := AudioServer.is_bus_mute(0)
+	_open_menu("Pause", [
+		["Reprendre", _close_menu],
+		["Téléportation…", open_teleport_menu],
+		["Aide à l'écran : " + ("affichée" if hud.show_help else "masquée"), func():
+			hud.show_help = not hud.show_help
+			open_pause_menu()],
+		["Son : " + ("coupé" if muted else "activé"), func():
+			AudioServer.set_bus_mute(0, not muted)
+			open_pause_menu()],
+		["Bruitages : " + Sfx.sounds_label(), func():
+			Sfx.toggle_set(self)
+			open_pause_menu()],
+		["", null],
+		["Créateur de personnage", func():
+			get_tree().paused = false
+			get_tree().change_scene_to_file("res://scenes/creator.tscn")],
+		["Recommencer au dernier feu", func():
+			get_tree().paused = false
+			get_tree().reload_current_scene()],
+	] + ([] if OS.has_feature("web") else [["Quitter le jeu", func(): get_tree().quit()]]),
+		"Échap ou B pour reprendre")
+
+## T / Select, or from the pause menu: jump to any bonfire or boss.
+func open_teleport_menu() -> void:
 	if not _sealed.is_empty():
+		_close_menu()
 		hud.flash_message("Impossible pendant un combat de boss", Color(1, 0.6, 0.5))
 		get_tree().create_timer(1.5).timeout.connect(func(): if not _ended: hud.message = "")
 		return
-	get_tree().paused = true
-	var layer := CanvasLayer.new()
-	layer.layer = 10
-	layer.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(layer)
-	var panel := PanelContainer.new()
-	panel.position = Vector2(180, 60)
-	panel.custom_minimum_size = Vector2(280, 0)
-	layer.add_child(panel)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 3)
-	panel.add_child(box)
-	var title := Label.new()
-	title.text = "Téléportation (test)"
-	title.add_theme_font_size_override("font_size", 12)
-	title.add_theme_color_override("font_color", Color(0.9, 0.8, 0.6))
-	box.add_child(title)
-	var places := teleport_places()
-	for k in places.size():
-		var b := Button.new()
-		b.text = "%d · %s" % [k + 1, places[k][0]]
-		b.add_theme_font_size_override("font_size", 9)
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.process_mode = Node.PROCESS_MODE_ALWAYS
-		b.pressed.connect(_teleport_pick.bind(k))
-		box.add_child(b)
-	var hint := Label.new()
-	hint.text = "Chiffre ou clic pour partir · T ou Échap pour fermer"
-	hint.add_theme_font_size_override("font_size", 7)
-	box.add_child(hint)
-	_teleport_menu = layer
+	var items := []
+	for p in teleport_places():
+		items.append([p[0], _teleport_pick.bind(p)])
+	_open_menu("Téléportation (test)", items, "Chiffre, clic ou A pour partir · Échap ou B pour fermer")
 
-func _close_teleport_menu() -> void:
-	if _teleport_menu:
-		_teleport_menu.queue_free()
-		_teleport_menu = null
-	get_tree().paused = false
-
-func _teleport_pick(k: int) -> void:
-	var p: Array = teleport_places()[k]
-	_close_teleport_menu()
+func _teleport_pick(p: Array) -> void:
+	_close_menu()
 	teleport_to_cell(p[1], p[0])
-
-func _unhandled_input(e: InputEvent) -> void:
-	if _teleport_menu == null:
-		return
-	if e is InputEventKey and e.pressed and not e.echo:
-		var n: int = e.physical_keycode - KEY_1
-		if n >= 0 and n < teleport_places().size():
-			_teleport_pick(n)
-		elif e.physical_keycode in [KEY_ESCAPE, KEY_T]:
-			_close_teleport_menu()
-		get_viewport().set_input_as_handled()
 
 # --- controls ------------------------------------------------------------
 
@@ -762,7 +759,8 @@ static func setup_inputs() -> void:
 		"attack_heavy": [[KEY_K], ["mouse", MOUSE_BUTTON_RIGHT], ["btn", JOY_BUTTON_Y], ["axis", JOY_AXIS_TRIGGER_RIGHT, 1.0]],
 		"heal": [[KEY_R], ["axis", JOY_AXIS_TRIGGER_LEFT, 1.0]],
 		"interact": [[KEY_E], ["btn", JOY_BUTTON_A]],
-		"help": [[KEY_H], ["btn", JOY_BUTTON_START]],
+		"help": [[KEY_H]],
+		"pause": [[KEY_ESCAPE], [KEY_P], ["btn", JOY_BUTTON_START]],
 		"mute": [[KEY_M]],
 		"sound_set": [[KEY_N]],
 		"teleport": [[KEY_T], ["btn", JOY_BUTTON_BACK]],

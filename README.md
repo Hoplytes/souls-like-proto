@@ -1,6 +1,7 @@
 # Souls-like Proto
 
-Prototype de souls-like en vue isométrique, fait avec **Godot 4.5**.
+Prototype de souls-like en vue isométrique, fait avec **Godot 4.5**. Rendu net en 1280 × 720 et plus : l'art de
+Flare est stocké à sa pleine résolution (`RES = 2` dans `tools/convert_flare.py`).
 
 **Jouer dans le navigateur :** https://hoplytes.github.io/souls-like-proto/
 (la page se met à jour automatiquement à chaque modification poussée sur `main`).
@@ -9,7 +10,7 @@ Prototype de souls-like en vue isométrique, fait avec **Godot 4.5**.
 
 - **Créateur de personnage** au lancement : homme ou femme, tête, coiffe, torse, mains, jambes, pieds,
   arme (13 armes, 5 styles de combat), bouclier et teinte d'armure. Le héros est sauvegardé.
-  **Échap** en jeu revient au créateur.
+  Le créateur est aussi accessible depuis le **menu pause** (Échap).
 - Un **monde ouvert** de 96 × 96 cases en quatre biomes, chacun avec sa musique, son ambiance sonore, sa lumière,
   ses ennemis et son **feu de camp** (se reposer remet la santé et les fioles, fait revenir les ennemis et devient
   le point de réapparition) :
@@ -37,8 +38,8 @@ Prototype de souls-like en vue isométrique, fait avec **Godot 4.5**.
 | Boire une fiole | R | LT |
 | Se reposer au feu | E | A |
 | Téléportation (test) | T, puis un chiffre ou un clic | Select |
-| Aide | H | Start |
-| Revenir au créateur de personnage | Échap | |
+| Menu pause (reprendre, téléportation, son, aide, créateur, recommencer) | Échap ou P | Start |
+| Aide | H | |
 | Couper / remettre le son | M | |
 | Sons enregistrés ↔ sons de synthèse | N | |
 
@@ -51,6 +52,7 @@ Prototype de souls-like en vue isométrique, fait avec **Godot 4.5**.
 | `scripts/avatar_sprite.gd` | Le héros modulaire : une couche par emplacement, ordonnées selon la direction |
 | `scripts/hd_sprite.gd` | Joue une planche en 8 directions (pièces du héros, ennemis, chevalier HD) |
 | `scripts/game.gd` | Le monde ouvert (biomes, décors, donjon, portails, téléportation) et le déroulement de la partie |
+| `scripts/game_menu.gd` | Menus du jeu en pause (pause, téléportation) |
 | `scripts/player.gd` | Le joueur : états, roulade, endurance, combos, bouclier, soin |
 | `scripts/weapons.gd` | **Les armes et leurs styles de combat, sous forme de données** |
 | `scripts/actor.gd` | Base commune : santé, poise (résistance), coups reçus, parade, riposte, mort |

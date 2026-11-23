@@ -20,8 +20,8 @@ const HELP := [
 	"  lever le bouclier au moment du coup = parade",
 	"R : boire une fiole",
 	"E : feu de camp   H : aide   M : son   N : type de sons",
-	"Échap : créateur de personnage",
-	"Manette : A/B/X/Y, LB bouclier, LT fiole, RB/RT attaques",
+	"Échap : pause   T : téléportation",
+	"Manette : A/B/X/Y, LB bouclier, LT fiole, RB/RT attaques, Start pause",
 ]
 
 func _ready() -> void:

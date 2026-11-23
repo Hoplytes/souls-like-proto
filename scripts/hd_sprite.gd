@@ -27,7 +27,10 @@ var folder := HD_FOLDER
 var sheets: Dictionary = HD_SHEETS
 var frames_of := {}  # sheet name -> frame count (default FRAMES)
 var looping_sheets := {}  # sheets that loop on their own (Flare)
-var feet_point := FEET
+var feet_point := FEET  # in the sheet's pixels
+## Detail factor: the sheets are drawn at 1/res (Flare art is stored at twice
+## its size in the world, for a sharp 1280x720 picture).
+var res := 1.0
 
 var anim := "idle"
 var fps := 12.0
@@ -44,7 +47,7 @@ var pivot := 0.0:
 		pivot = v
 		position.y = -v
 		if _sprite:
-			_sprite.offset = -feet_point + Vector2(0, v)
+			_apply_offset()
 
 static func available() -> bool:
 	return ResourceLoader.exists(HD_FOLDER + "Idle.png")
@@ -55,6 +58,8 @@ static func flare(name: String) -> HdSprite:
 	s.folder = "res://assets/flare/%s/" % name
 	var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(s.folder + "anims.json"))
 	s.feet_point = Vector2(meta.feet[0], meta.feet[1])
+	s.res = float(meta.get("res", 1))
+	s._sprite.scale = Vector2.ONE / s.res
 	s.sheets = {"idle": "stance", "walk": "run", "slash": "swing", "slash_heavy": "swing", "thrust": "swing",
 		"hurt": "die", "stagger": "hit", "block": "block", "block_start": "block", "jump": "run", "heal": "stance"}
 	for a in meta.anims:
@@ -73,7 +78,7 @@ func _init() -> void:
 	_show()
 
 func _apply_offset() -> void:
-	_sprite.offset = -feet_point + Vector2(0, pivot)
+	_sprite.offset = -feet_point + Vector2(0, pivot * res)
 
 func _count() -> int:
 	return frames_of.get(sheets.get(anim, ""), FRAMES)
@@ -85,7 +90,7 @@ func set_layer_visible(_i: int, _v: bool) -> void:
 	pass
 
 func feet() -> Vector2:
-	return feet_point
+	return feet_point / res
 
 func _texture(name: String) -> Texture2D:
 	if not _textures.has(name):

@@ -113,7 +113,9 @@ static func start_ambience(from: Node) -> void:
 	_ambience.stream = s
 	_ambience.play()
 
-static func toggle_set(from: Node) -> String:
+static func toggle_set(_from: Node) -> String:
 	use_recorded = not use_recorded
-	start_ambience(from)
-	return "Sons : enregistrés" if use_recorded else "Sons : synthèse"
+	return "Sons : " + sounds_label()
+
+static func sounds_label() -> String:
+	return "enregistrés" if use_recorded else "synthèse"
