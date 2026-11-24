@@ -68,6 +68,8 @@ static func play(from: Node, name: String, pos: Variant = null, volume_db: float
 	p.stream = stream(path)
 	p.volume_db = volume_db
 	p.pitch_scale = 1.0 + randf_range(-pitch_var, pitch_var)
+	if from.get_tree().paused:
+		p.process_mode = Node.PROCESS_MODE_ALWAYS  # heard in the menus too
 	from.get_tree().current_scene.add_child(p)
 	p.finished.connect(p.queue_free)
 	p.play()
@@ -92,6 +94,8 @@ static func flare(from: Node, name: String, pos: Variant = null, volume_db: floa
 	p.stream = stream(path)
 	p.volume_db = volume_db
 	p.pitch_scale = 1.0 + randf_range(-pitch_var, pitch_var)
+	if from.get_tree().paused:
+		p.process_mode = Node.PROCESS_MODE_ALWAYS  # heard in the menus too
 	from.get_tree().current_scene.add_child(p)
 	p.finished.connect(p.queue_free)
 	p.play()

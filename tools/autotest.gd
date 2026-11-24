@@ -100,11 +100,22 @@ func _shield_test(p: Player) -> void:
 	p.receive_hit(make_hit.call(behind))
 	log_lines.append("from behind: player hp %d" % p.hp)
 	Input.action_release("block")
-	sk._riposte_until = Time.get_ticks_msec() + 1000
+	while p.state != Player.State.FREE:  # the blow from behind staggered the hero
+		await get_tree().physics_frame
+	# The parried skeleton is open: a light attack now is a riposte.
+	sk.process_mode = Node.PROCESS_MODE_INHERIT
+	sk.open_to_riposte(2.0)
+	sk.global_position = p.global_position + p.facing * 24.0
 	var skhp := sk.hp
-	sk.take_hit(16, 0, p.global_position)
-	log_lines.append("riposte: skeleton hp %d->%d (16 dmg doubled)" % [skhp, sk.hp])
-	sk.queue_free()
+	await _wait(0.4)
+	await _press("attack_light")
+	await _wait(0.2)
+	log_lines.append("riposte: player state %d (crit=%d), skeleton state %d" % [p.state, Player.State.CRIT, sk.state])
+	await _shot("14_riposte")
+	await _wait(1.0)
+	log_lines.append("riposte: skeleton hp %d->%d" % [skhp, sk.hp])
+	if is_instance_valid(sk):
+		sk.queue_free()
 	behind.queue_free()
 	for h in hits:
 		h.free()
@@ -146,7 +157,7 @@ func _stick_test(p: Player) -> void:
 			main.world.add_child(sk)
 			if case[0] != "side+attacks" and case[0] != "blocking":
 				sk._cooldown = 99.0  # chase only, never attack
-			sk.state = SkeletonEnemy.State.CHASE
+			sk.state = SkeletonEnemy.State.COMBAT
 			group.append(sk)
 		await _wait(0.4)
 		var start := p.global_position
@@ -161,6 +172,224 @@ func _stick_test(p: Player) -> void:
 		for sk in group:
 			sk.queue_free()
 		await _wait(0.1)
+
+## Clears the enemies around and puts the hero in an open spot of the plain.
+func _clear_spot(p: Player) -> void:
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e is SkeletonEnemy:
+			e.queue_free()
+	p.global_position = main.start_pos + Vector2(0, -110)
+	p.rest()
+	p.velocity = Vector2.ZERO
+	await _wait(0.2)
+
+## Running (roll held), the roll on release, the backstep without direction,
+## the running attack.
+func _move_test(p: Player) -> void:
+	await _clear_spot(p)
+	Input.action_press("move_right")
+	Input.action_press("roll")
+	await _wait(0.8)
+	log_lines.append("sprint: sprinting %s speed %.0f (walk %.0f) stamina %.0f/%.0f state %d" % [p.sprinting, p.velocity.length(), Player.SPEED, p.stamina, p.max_stamina, p.state])
+	await _shot("15_sprint")
+	await _press("attack_light")
+	await _wait(0.25)
+	log_lines.append("running attack: state %d anim %s" % [p.state, p.sprite.anim])
+	Input.action_release("roll")
+	Input.action_release("move_right")
+	await _wait(1.2)
+	log_lines.append("after a long hold: state %d (no roll: %s)" % [p.state, p.state != Player.State.ROLL])
+	Input.action_press("move_down")
+	await _press("roll", 0.06)
+	await _wait(0.05)
+	log_lines.append("tap with a direction: state %d (roll=%d)" % [p.state, Player.State.ROLL])
+	Input.action_release("move_down")
+	await _wait(1.0)
+	var at := p.global_position
+	await _press("roll", 0.06)
+	await _wait(0.05)
+	log_lines.append("tap without direction: state %d (backstep=%d)" % [p.state, Player.State.BACKSTEP])
+	await _wait(0.6)
+	log_lines.append("backstep moved %.0f px" % p.global_position.distance_to(at))
+
+## A backstab on an enemy turned away, and a shield bearer's guard.
+func _crit_test(p: Player) -> void:
+	await _clear_spot(p)
+	var sk := SkeletonEnemy.new()
+	sk.player = p
+	sk.flare_name = "pack/skeleton_a"
+	sk.position = p.global_position + Vector2(0, -40)
+	main.world.add_child(sk)
+	await _wait(0.1)
+	sk.facing = Vector2.UP  # turned away from the hero, who stands south of it
+	sk._wander_t = 99.0
+	p.global_position = sk.global_position + Vector2(0, 22)
+	p.facing = Vector2.UP
+	var hp0 := sk.hp
+	await _press("attack_light")
+	await _wait(0.25)
+	log_lines.append("backstab: player state %d (crit=%d), skeleton state %d (held=%d)" % [p.state, Player.State.CRIT, sk.state, SkeletonEnemy.State.HELD])
+	await _shot("16_backstab")
+	await _wait(0.9)
+	log_lines.append("backstab: skeleton hp %d->%d dead %s" % [hp0, sk.hp, sk.dead])
+	if is_instance_valid(sk):
+		sk.queue_free()
+	await _clear_spot(p)
+	var sh := SkeletonEnemy.new()
+	sh.player = p
+	sh.flare_name = "pack/skeleton_c"
+	sh.position = p.global_position + Vector2(0, -30)
+	main.world.add_child(sh)
+	await _wait(0.2)
+	sh.state = SkeletonEnemy.State.COMBAT
+	sh._cooldown = 99.0
+	sh.facing = Vector2.DOWN
+	var h := Hitbox.new()
+	h.source = p
+	h.damage = 18
+	h.poise_damage = 12
+	var hp1 := sh.hp
+	sh.receive_hit(h)
+	log_lines.append("shield from the front: hp %d->%d guard %.0f" % [hp1, sh.hp, sh._guard])
+	await _shot("17_shield_block")
+	for k in 4:
+		sh.receive_hit(h)
+	log_lines.append("guard after 5 blows: %.0f, state %d (stagger=%d), open %s" % [sh._guard, sh.state, SkeletonEnemy.State.STAGGER, sh.can_riposte()])
+	h.free()
+	sh.queue_free()
+	await _wait(0.2)
+
+## Each enemy type fights the (unkillable) hero for a while: which moves it
+## used, and screenshots of their attacks.
+func _ai_test(p: Player) -> void:
+	for model in SkeletonEnemy.TYPES:
+		await _clear_spot(p)
+		p.max_hp = 99999
+		p.hp = 99999
+		var sk := SkeletonEnemy.new()
+		sk.player = p
+		sk.flare_name = model
+		sk.position = p.global_position + Vector2(-60, -50)
+		main.world.add_child(sk)
+		sk.facing = Vector2(60, 50).normalized()  # it sees the hero
+		var moves := {}
+		var states := {}
+		var shot := false
+		var t := 0.0
+		while t < 7.0:
+			await get_tree().physics_frame
+			t += get_physics_process_delta_time()
+			if not is_instance_valid(sk):
+				break
+			states[SkeletonEnemy.State.keys()[sk.state]] = true
+			if sk.state == SkeletonEnemy.State.ATTACK:
+				moves[sk._move] = true
+				if not shot and sk._t > sk._m.time * sk._m.hit:
+					shot = true
+					await _shot("ai_" + model.trim_prefix("pack/"))
+		log_lines.append("ai %s: states %s moves %s, hero hp lost %d" % [model, states.keys(), moves.keys(), 99999 - p.hp])
+		if is_instance_valid(sk):
+			sk.queue_free()
+	p.apply_stats(true)
+
+## Souls, a level bought at the bonfire, the travel menu, an unlit bonfire.
+func _bonfire_test(p: Player) -> void:
+	await _clear_spot(p)
+	Progress.add_souls(600)
+	var fire: Vector2 = main._bonfires.prairie.global_position
+	p.global_position = fire + Vector2(0, 24)
+	await _wait(0.3)
+	log_lines.append("at the bonfire: hint '%s'" % main.hud.hint)
+	await _press("interact")
+	await _wait(0.4)
+	await _shot("18_bonfire_menu")
+	var hp0 := p.max_hp
+	main._open_level_menu("prairie")
+	await _wait(0.3)
+	await _shot("19_level_menu")
+	main._level_up("vigor", "prairie", 0)
+	await _wait(0.3)
+	await _shot("20_level_up")
+	log_lines.append("level up: level %d, max hp %d->%d, souls %d" % [Progress.data.level, hp0, p.max_hp, Progress.data.souls])
+	Progress.data.lit.append("ruins")
+	main._open_travel_menu("prairie")
+	await _wait(0.3)
+	await _shot("21_travel_menu")
+	Progress.data.lit.erase("ruins")
+	main._close_menu()
+	await _wait(0.3)
+	log_lines.append("menus closed: paused %s, player state %d" % [get_tree().paused, p.state])
+	main.teleport_to_cell(main.PLACES.ruins.cell)
+	p.global_position = main._bonfires.ruins.global_position + Vector2(0, 24)
+	await _wait(0.5)
+	log_lines.append("unlit bonfire: hint '%s'" % main.hud.hint)
+	await _press("interact")
+	await _wait(0.6)
+	await _shot("22_bonfire_lit")
+	log_lines.append("lit: %s, ruins in list %s" % [main._bonfires.ruins.lit, "ruins" in Progress.data.lit])
+
+## A chest, an item, the bloodstain and its souls.
+func _loot_test(p: Player) -> void:
+	main.teleport_to_cell(WorldMap.CAMP + Vector2(0.5, 1.0))
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e is SkeletonEnemy:
+			e.queue_free()
+	await _wait(0.5)
+	p.global_position = main.cell_of(WorldMap.CAMP + Vector2(-0.9, -0.9)) + Vector2(0, 20)
+	await _wait(0.3)
+	var f0 := p.max_flasks
+	log_lines.append("chest: hint '%s'" % main.hud.hint)
+	await _press("interact")
+	await _wait(0.4)
+	await _shot("23_chest")
+	log_lines.append("chest opened: flasks max %d->%d, taken %s" % [f0, p.max_flasks, Progress.data.taken.keys()])
+	await _wait(2.0)
+	# The bloodstain of a death, here.
+	Progress.data.stain = {"x": p.global_position.x + 40.0, "y": p.global_position.y - 10.0, "souls": 345}
+	main._spawn_stain()
+	var s0 := int(Progress.data.souls)
+	await _wait(0.3)
+	await _shot("24_bloodstain")
+	p.global_position += Vector2(40, -14)
+	await _wait(0.3)
+	log_lines.append("bloodstain: hint '%s'" % main.hud.hint)
+	await _press("interact")
+	await _wait(0.5)
+	log_lines.append("bloodstain taken: souls %d->%d, stain %s" % [s0, Progress.data.souls, Progress.data.stain])
+	await _shot("25_souls_back")
+	# A message on the ground, by the start.
+	var msg: Vector2 = main.cell_of(Vector2(main.PLACES.prairie.cell) + main.MESSAGES[0][0])
+	p.global_position = msg + Vector2(0, 10)
+	await _wait(0.4)
+	log_lines.append("message: hint '%s'" % main.hud.hint)
+	await _press("interact")
+	await _wait(0.4)
+	log_lines.append("message read: '%s'" % main.hud.message)
+	await _shot("27_message")
+
+## The boss's fog: no way in until [E].
+func _fog_test(p: Player) -> void:
+	p.global_position = main.arena_entry()
+	await _wait(0.3)
+	Input.action_press("move_up")
+	await _wait(1.6)
+	Input.action_release("move_up")
+	await _wait(0.2)
+	log_lines.append("fog: hint '%s', sealed %s, dist %.1f" % [main.hud.hint, main._sealed.keys(), main._arena_dist(p.global_position, "minotaur")])
+	await _shot("26_fog")
+	await _press("interact")
+	await _wait(1.3)
+	log_lines.append("through the fog: sealed %s, dist %.1f, boss state %d" % [main._sealed.keys(), main._arena_dist(p.global_position, "minotaur"), main.boss.state])
+
+## Dying: the souls stay in a bloodstain, the death screen.
+func _death_test(p: Player) -> void:
+	main._ended = false
+	Progress.data.souls = 777
+	p.invulnerable = false
+	p.take_hit(99999, 0, p.global_position + Vector2(10, 0))
+	await _wait(2.5)
+	await _shot("98_death")
+	log_lines.append("death: souls %d, stain %s, deaths %d" % [Progress.data.souls, Progress.data.stain, Progress.data.deaths])
 
 func _music_state() -> String:
 	var out := []
@@ -212,6 +441,11 @@ func _run() -> void:
 	await _shield_test(p)
 	await _stick_test(p)
 	await _lock_test(p)
+	await _move_test(p)
+	await _crit_test(p)
+	await _ai_test(p)
+	await _bonfire_test(p)
+	await _loot_test(p)
 	# The pause menu, then the teleport menu.
 	main.open_pause_menu()
 	await _wait(0.3)
@@ -254,14 +488,11 @@ func _run() -> void:
 	log_lines.append("wyvern: state %d, sealed %s, pos %s player %s, sprite %s %s frames %d" % [wy.state, main._sealed.keys(), wy.global_position, p.global_position, wy.sprite.anim, wy.sprite._sprite.texture, wy.sprite.frame_count()])
 	wy.take_hit(9999, 0, wy.global_position + Vector2(0, 30))
 	await _wait(4.5)
-	log_lines.append("wyvern dead %s, sealed %s, defeated %s" % [wy.dead, main._sealed.keys(), main.defeated])
-	# Teleport to the arena entrance and wake the boss.
-	p.global_position = main.arena_entry()
+	log_lines.append("wyvern dead %s, sealed %s, defeated %s" % [wy.dead, main._sealed.keys(), Progress.data.defeated])
+	# Through the fog to the Minotaur.
+	p.invulnerable = false
+	await _fog_test(p)
 	await _wait(0.3)
-	Input.action_press("move_up")
-	await _wait(1.6)
-	Input.action_release("move_up")
-	await _wait(0.8)
 	await _shot("06_boss_intro")
 	log_lines.append("music after boss intro: " + _music_state())
 	await _wait(1.2)
@@ -278,6 +509,7 @@ func _run() -> void:
 	await _shot("10_phase2_attack")
 	log_lines.append("boss hp %d phase %d" % [main.boss.hp, main.boss.phase])
 	log_lines.append("music in phase 2: " + _music_state())
+	await _death_test(p)
 	# A wide view of the whole level.
 	main._ended = true  # stops the game from moving the camera limits back
 	main.show_all_chunks()

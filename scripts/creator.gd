@@ -1,7 +1,8 @@
 extends Control
 ## Character creator: the hero stands on a plinth on the left, with 8 arrows
 ## around it to look at him from any side (or LB / RB); the model is chosen
-## on the right (left/right or the arrows), Enter to start.
+## on the right (left/right or the arrows). Enter continues the saved game
+## (or starts one); "Nouvelle partie" (or Y) erases it, after a confirmation.
 ## Test runs (--autotest=, --showcase=) go straight to the game.
 
 const LINES := [["model", "Modèle"]]
@@ -17,6 +18,8 @@ const PLINTH := Vector2(170, 250)
 var _info: Label
 var _swing_t := 0.0
 var _swing_k := 0
+var _new_button: Button
+var _confirm_new := false
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -26,6 +29,7 @@ func _ready() -> void:
 			return
 	Game.setup_inputs()
 	HeroConfig.load_saved()
+	Progress.load_game()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	size = get_viewport_rect().size
 	var bg := ColorRect.new()
@@ -59,7 +63,7 @@ func _build_preview() -> void:
 	title.add_theme_color_override("font_color", ACCENT)
 	add_child(title)
 	var hint := Label.new()
-	hint.text = "Clic ou ↑↓ ←→ · Entrée : commencer · flèches autour du héros (ou LB / RB) : le tourner"
+	hint.text = "Clic ou ↑↓ ←→ · Entrée : %s · flèches autour du héros (ou LB / RB) : le tourner" % ("continuer" if Progress.exists() else "commencer")
 	hint.position = Vector2(20, 338)
 	hint.add_theme_font_size_override("font_size", 8)
 	hint.add_theme_color_override("font_color", Color(0.55, 0.52, 0.5))
@@ -134,13 +138,33 @@ func _build_panel() -> void:
 	panel.add_child(_info)
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 8)
-	var go := Button.new()
-	go.text = "Commencer  ▶"
-	go.add_theme_font_size_override("font_size", 12)
-	go.focus_mode = Control.FOCUS_NONE
-	go.pressed.connect(_start)
-	buttons.add_child(go)
+	if Progress.exists():
+		var go := Button.new()
+		go.text = "Continuer  ▶"
+		go.add_theme_font_size_override("font_size", 12)
+		go.focus_mode = Control.FOCUS_NONE
+		go.pressed.connect(_start.bind(false))
+		buttons.add_child(go)
+	_new_button = Button.new()
+	_new_button.text = "Nouvelle partie" if Progress.exists() else "Commencer  ▶"
+	_new_button.add_theme_font_size_override("font_size", 12 if not Progress.exists() else 9)
+	_new_button.focus_mode = Control.FOCUS_NONE
+	_new_button.pressed.connect(_new_game)
+	buttons.add_child(_new_button)
 	panel.add_child(buttons)
+	if Progress.exists():
+		var d := Progress.data
+		var save := Label.new()
+		var plural := func(n: int, one: String, many: String) -> String:
+			return "%d %s" % [n, one if n < 2 else many]
+		save.text = "Partie en cours : niveau %d, %s, %s, %s, %s." % [d.level, plural.call(int(d.souls), "âme", "âmes"),
+			plural.call(d.lit.size(), "feu allumé", "feux allumés"), plural.call(d.defeated.size(), "boss vaincu", "boss vaincus"),
+			plural.call(int(d.deaths), "mort", "morts")]
+		save.add_theme_font_size_override("font_size", 8)
+		save.add_theme_color_override("font_color", Color(0.75, 0.7, 0.62))
+		save.custom_minimum_size = Vector2(280, 0)
+		save.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		panel.add_child(save)
 
 func _arrow(text: String, key: String, step: int) -> Button:
 	var b := Button.new()
@@ -215,13 +239,26 @@ func _unhandled_input(e: InputEvent) -> void:
 	elif e.is_action_pressed("ui_left"):
 		_change(_rows[_sel][0], -1)
 	elif e.is_action_pressed("ui_accept"):
-		_start()
+		_start(not Progress.exists())
+	elif e is InputEventJoypadButton and e.pressed and e.button_index == JOY_BUTTON_Y:
+		_new_game()
 	elif e is InputEventJoypadButton and e.pressed and e.button_index == JOY_BUTTON_LEFT_SHOULDER:
 		_face(_dir - 1)
 	elif e is InputEventJoypadButton and e.pressed and e.button_index == JOY_BUTTON_RIGHT_SHOULDER:
 		_face(_dir + 1)
 
-func _start() -> void:
+## A new game erases the saved one: the first press asks to confirm.
+func _new_game() -> void:
+	if Progress.exists() and not _confirm_new:
+		_confirm_new = true
+		_new_button.text = "Effacer la partie ? Confirmer"
+		_new_button.add_theme_color_override("font_color", Color(1, 0.55, 0.45))
+		return
+	_start(true)
+
+func _start(new_game: bool) -> void:
+	if new_game:
+		Progress.new_game()
 	HeroConfig.save()
 	# The world takes a moment to build: say so before the screen freezes.
 	var cover := ColorRect.new()

@@ -81,11 +81,6 @@ func open_to_riposte(seconds: float = 1.6) -> void:
 func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 	if dead or invulnerable:
 		return false
-	if Time.get_ticks_msec() < _riposte_until:
-		_riposte_until = 0
-		dmg *= 2
-		poise_dmg *= 2
-		Fx.float_text(get_parent(), global_position + Vector2(0, -body_height - 14), "Riposte !", Color(1, 0.85, 0.3))
 	hp = maxi(0, hp - dmg)
 	poise -= poise_dmg
 	Sfx.play(self, hit_sound, global_position)
@@ -102,6 +97,45 @@ func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 	else:
 		on_hurt()
 	return true
+
+# --- critical hits (backstab, riposte) ------------------------------------------
+
+## Open to a riposte (after a parry or a guard break)?
+func can_riposte() -> bool:
+	return not dead and Time.get_ticks_msec() < _riposte_until
+
+## Can be stabbed in the back? Bosses cannot.
+func can_backstab() -> bool:
+	return false
+
+## Extra distance at which a critical can be started (big bodies).
+func crit_reach() -> float:
+	return 0.0
+
+## The hero grabs this actor for a critical: it stays still until struck.
+func begin_critical(_by: Node2D, _kind: String) -> void:
+	_riposte_until = 0
+	on_stagger()
+
+## The critical blow itself: heavy damage, poise ignored.
+func take_critical(dmg: int, from: Vector2) -> void:
+	if dead:
+		return
+	hp = maxi(0, hp - dmg)
+	damaged.emit(dmg)
+	Sfx.play(self, "hit_heavy", global_position, 2.0)
+	flash()
+	var away := (global_position - from).normalized()
+	for k in 3:
+		Fx.hit_spark(get_parent(), global_position + Vector2(randf_range(-6, 6), -body_height * 0.5 + randf_range(-6, 6)) - away * 4)
+	knockback = away * 90.0
+	if hp <= 0:
+		die()
+	else:
+		after_critical()
+
+func after_critical() -> void:
+	on_stagger()
 
 func knockback_strength(dmg: int) -> float:
 	return 60.0 + dmg * 2.0

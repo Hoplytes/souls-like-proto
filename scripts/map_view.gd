@@ -72,16 +72,23 @@ func _draw() -> void:
 	# Bonfires, named after their region.
 	for place in Game.PLACES:
 		var p := _at(Game.PLACES[place].cell)
-		var flick := 2.4 + sin(_t * 6.0 + p.x) * 0.4
+		var lit: bool = place in Progress.data.lit
+		var flick := 2.4 + sin(_t * 6.0 + p.x) * 0.4 if lit else 2.0
 		draw_circle(p, flick + 1.2, Color(0, 0, 0, 0.6))
-		draw_circle(p, flick, Color(1.0, 0.62, 0.22))
+		draw_circle(p, flick, Color(1.0, 0.62, 0.22) if lit else Color(0.45, 0.4, 0.36))
 		var label: String = Game.BIOMES[place].name
 		if place != "dungeon":
-			_text(p + Vector2(0, -7), label, 8, Color(1.0, 0.92, 0.8))
+			_text(p + Vector2(0, -7), label, 8, Color(1.0, 0.92, 0.8) if lit else Color(0.7, 0.66, 0.6))
+	# The bloodstain, where the souls were lost.
+	var st: Dictionary = Progress.data.stain
+	if not st.is_empty():
+		var sp := _at(Game.to_cell(Vector2(float(st.x), float(st.y))))
+		draw_circle(sp, 3.5 + sin(_t * 4.0) * 0.8, Color(0.4, 1.0, 0.5, 0.35))
+		draw_circle(sp, 2.0, Color(0.5, 1.0, 0.6))
 	# Bosses: red while alive, grey once defeated.
 	for model in Game.ARENAS:
 		var p := _at(Game.ARENAS[model].center)
-		var dead: bool = Game.defeated.has(model)
+		var dead: bool = Progress.data.defeated.has(model)
 		var col := Color(0.55, 0.55, 0.55) if dead else Color(0.9, 0.18, 0.15)
 		draw_line(p + Vector2(-3.5, -3.5), p + Vector2(3.5, 3.5), col, 2.0)
 		draw_line(p + Vector2(-3.5, 3.5), p + Vector2(3.5, -3.5), col, 2.0)
@@ -104,6 +111,9 @@ func _draw() -> void:
 	draw_circle(Vector2(lx, y - 3), 2.6, Color(1.0, 0.62, 0.22))
 	_text(Vector2(lx + 7, y), "feu de camp", 8, Color(0.8, 0.78, 0.74), false)
 	lx += 72
+	draw_circle(Vector2(lx, y - 3), 2.0, Color(0.5, 1.0, 0.6))
+	_text(Vector2(lx + 7, y), "âmes perdues", 8, Color(0.8, 0.78, 0.74), false)
+	lx += 76
 	draw_line(Vector2(lx - 3, y - 6), Vector2(lx + 3, y), Color(0.9, 0.18, 0.15), 2.0)
 	draw_line(Vector2(lx - 3, y), Vector2(lx + 3, y - 6), Color(0.9, 0.18, 0.15), 2.0)
 	_text(Vector2(lx + 7, y), "boss", 8, Color(0.8, 0.78, 0.74), false)

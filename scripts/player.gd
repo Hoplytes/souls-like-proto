@@ -7,7 +7,7 @@ extends Actor
 
 signal stats_changed
 
-enum State { FREE, ROLL, ATTACK, HEAL, BLOCK, STAGGER, DEAD }
+enum State { FREE, ROLL, BACKSTEP, ATTACK, CRIT, HEAL, BLOCK, STAGGER, REST, DEAD }
 
 const SPEED := 95.0
 ## Souls-like feel: walking answers at once (almost no inertia); the weight
@@ -34,10 +34,21 @@ const STAMINA_REGEN := 45.0
 const STAMINA_DELAY := 0.5
 const BUFFER_TIME := 0.3
 const HEAL_TIME := 0.9
-const HEAL_AMOUNT := 45
+const HEAL_SHARE := 0.4  # a flask gives back 40 % of the health
 const PARRY_WINDOW := 0.18  # seconds after raising the shield
 const BLOCK_ARC := deg_to_rad(75.0)  # half-angle of the shield's cover
 const BLOCK_SPEED := 0.45
+## Holding the roll button runs (Souls): a tap rolls, on release.
+const SPRINT_HOLD := 0.28
+const SPRINT_SPEED := 1.6
+const SPRINT_COST := 15.0  # stamina per second
+const BACKSTEP_TIME := 0.36
+const BACKSTEP_IFRAMES := 0.2
+## Critical hits (backstab, riposte): length of the move and damage factor
+## on the weapon's light attack.
+const CRIT_TIME := 1.0
+const CRIT_MULT := 3.2
+const CRIT_RANGE := 34.0
 
 var max_stamina := 100.0
 var stamina := 100.0
@@ -75,6 +86,14 @@ const LOCK_BREAK := 320.0  # px at which the lock is lost
 var lock_target: Node2D
 var _lock_marker: LockMarker
 var _stick_flicked := false
+var sprinting := false
+var _roll_down := false
+var _roll_hold := 0.0
+var _winded := false  # ran out of stamina while running: walk until the button is released
+var _ran_t := 9.0  # time since the hero stopped running (running attacks)
+var _crit_target: Actor
+var _crit_kind := ""
+var _crit_done := false
 
 func make_sprite():
 	if pack:
@@ -89,7 +108,7 @@ func _ready() -> void:
 	weapon = "longsword"
 	if hd:
 		shadow_size = Vector2.ZERO  # its sheets include a shadow
-	max_hp = 120
+	apply_stats(true)
 	max_poise = 1.0  # any hit staggers, except during heavy attacks
 	collision_layer = 2
 	collision_mask = 1 | 4
@@ -108,6 +127,7 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 	_hit_iframes = maxf(0.0, _hit_iframes - delta)
+	_ran_t += delta
 	_read_buffer(delta)
 	_regen(delta)
 	_t += delta
@@ -116,7 +136,11 @@ func _physics_process(delta: float) -> void:
 	match state:
 		State.FREE: _free(input)
 		State.ROLL: _roll(delta)
+		State.BACKSTEP: _backstep()
 		State.ATTACK: _attack(delta)
+		State.CRIT: _crit()
+		State.REST:
+			velocity = Vector2.ZERO
 		State.HEAL: _heal(input)
 		State.BLOCK: _block(input)
 		State.STAGGER:
@@ -128,14 +152,30 @@ func _physics_process(delta: float) -> void:
 	_guard_flash = maxf(0.0, _guard_flash - delta)
 	sprite.facing8 = facing
 	var iframes_end: float = ROLL_IFRAMES.x + (ROLL_IFRAMES.y - ROLL_IFRAMES.x) * ROLLS[_roll_class].iframes
-	invulnerable = (state == State.ROLL and _t > ROLL_IFRAMES.x and _t < iframes_end) or _hit_iframes > 0.0
+	invulnerable = (state == State.ROLL and _t > ROLL_IFRAMES.x and _t < iframes_end) or _hit_iframes > 0.0 \
+		or (state == State.BACKSTEP and _t < BACKSTEP_IFRAMES) or state == State.CRIT
+	if state != State.FREE:
+		sprinting = false
 	stats_changed.emit()
 
 func _read_buffer(delta: float) -> void:
-	for a in ["roll", "attack_light", "attack_heavy", "heal", "block"]:
+	for a in ["attack_light", "attack_heavy", "heal", "block"]:
 		if Input.is_action_just_pressed(a):
 			_buffer = a
 			_buffer_t = BUFFER_TIME
+	# The roll button: a tap rolls when it is released, holding it runs.
+	if Input.is_action_just_pressed("roll"):
+		_roll_down = true
+		_roll_hold = 0.0
+	if _roll_down:
+		if Input.is_action_pressed("roll"):
+			_roll_hold += delta
+		else:
+			_roll_down = false
+			_winded = false
+			if _roll_hold < SPRINT_HOLD:
+				_buffer = "roll"
+				_buffer_t = BUFFER_TIME
 	# An input given during an attack or a roll waits for its end (Souls' buffer).
 	if state not in [State.ATTACK, State.ROLL]:
 		_buffer_t -= delta
@@ -150,7 +190,7 @@ func _take_buffer(allowed: Array) -> String:
 	return ""
 
 func _regen(delta: float) -> void:
-	if state in [State.ROLL, State.ATTACK]:
+	if state in [State.ROLL, State.ATTACK, State.BACKSTEP, State.CRIT] or sprinting:
 		return
 	_stamina_wait -= delta
 	if _stamina_wait <= 0.0:
@@ -184,17 +224,31 @@ func _free(input: Vector2) -> void:
 	if Input.is_action_pressed("block"):
 		_start_block()
 		return
+	# Running: the roll button held while moving, as long as stamina lasts.
+	var was_sprinting := sprinting
+	sprinting = _roll_down and _roll_hold >= SPRINT_HOLD and input != Vector2.ZERO and not _winded
+	if sprinting:
+		stamina -= SPRINT_COST * delta
+		_stamina_wait = STAMINA_DELAY
+		if stamina <= 0.0:
+			stamina = 0.0
+			_winded = true
+			sprinting = false
+		_turn_toward(input.normalized(), delta)  # running ignores the lock
+	elif was_sprinting:
+		_ran_t = 0.0
 	# Momentum: speed builds up along the way the hero faces.
 	if input != Vector2.ZERO:
 		# Locked: strafe where the stick points; free: walk where the hero faces.
-		var dir := input.normalized() if lock_target else facing
-		var target := dir * SPEED * minf(1.0, input.length())
+		var dir := input.normalized() if lock_target and not sprinting else facing
+		var target := dir * SPEED * minf(1.0, input.length()) * (SPRINT_SPEED if sprinting else 1.0)
 		velocity = velocity.move_toward(target, ACCEL * delta)
 	else:
 		velocity = velocity.move_toward(Vector2.ZERO, DECEL * delta)
 	var pace := velocity.length() / SPEED
 	if pace > 0.1:
-		sprite.play(_move_anim(), WALK_ANIM * clampf(pace, 0.5, 1.0))
+		var anim := "walk" if sprinting else _move_anim()
+		sprite.play(anim, WALK_ANIM * clampf(pace, 0.5, SPRINT_SPEED * 0.85))
 		_step_t -= delta * pace
 		if _step_t <= 0.0:
 			_step_t = 4.5 / WALK_ANIM  # two steps per walk cycle
@@ -205,14 +259,20 @@ func _free(input: Vector2) -> void:
 func _start_action(action: String, input: Vector2) -> bool:
 	match action:
 		"roll":
-			if _spend(ROLL_COST):
+			if input.length() < 0.2:  # no direction: a quick hop back
+				if _spend(ROLL_COST * 0.6):
+					_start_backstep()
+					return true
+			elif _spend(ROLL_COST):
 				_start_roll(input)
 				return true
 		"attack_light", "attack_heavy":
 			var kind := "light" if action == "attack_light" else "heavy"
 			if stamina > 0.0:
 				_combo = 0
-				_start_attack(kind, input)
+				if kind == "light" and _try_critical():
+					return true
+				_start_attack(kind, input, sprinting or _ran_t < 0.15)
 				return true
 		"block":
 			_start_block()
@@ -301,6 +361,25 @@ func _roll(delta: float) -> void:
 			_spawn_ghost()
 			_ghost_t = 0.07
 
+## A hop back, without a direction: short, quick, with fewer invincible frames.
+func _start_backstep() -> void:
+	state = State.BACKSTEP
+	_t = 0.0
+	if sprite.has_anim("back"):
+		sprite.play("back", 0.0, false, true)
+	else:
+		sprite.play("idle", 2.0)
+	Sfx.play(self, "roll", null, -6.0)
+	Fx.dust(get_parent(), global_position, facing)
+
+func _backstep() -> void:
+	var k := minf(1.0, _t / BACKSTEP_TIME)
+	velocity = -facing * lerpf(230.0, 20.0, k)
+	if sprite.anim == "back":
+		sprite.set_progress(k * 0.6)
+	if _t >= BACKSTEP_TIME + 0.08:
+		_to_free()
+
 func _reset_sprite() -> void:
 	sprite.scale = Vector2.ONE
 	sprite.rotation = 0.0
@@ -335,7 +414,7 @@ func _soft_lock(input: Vector2) -> Vector2:
 			best = e
 	return (best.global_position - global_position).normalized() if best else facing
 
-func _start_attack(kind: String, input: Vector2) -> void:
+func _start_attack(kind: String, input: Vector2, running := false) -> void:
 	_atk = Weapons.moves(weapon)[kind].duplicate()
 	if _combo > 0:  # follow-ups of a combo come out quicker than the opener
 		_atk.windup *= 0.7
@@ -347,6 +426,12 @@ func _start_attack(kind: String, input: Vector2) -> void:
 	if kind == "heavy":
 		anim = ["slash_heavy", "slash_heavy2"][_heavy_k % 2]
 		_heavy_k += 1
+	if running:  # a running attack: a lunge carried by the run
+		anim = "slash2" if kind == "light" else "slash_heavy2"
+		_atk.step = 95 if kind == "light" else 120
+		_atk.windup *= 0.85
+		_atk.damage = int(_atk.damage * 1.15)
+		sprinting = false
 	if not sprite.has_anim(anim):
 		anim = "slash_heavy" if kind == "heavy" else "slash"
 	sprite.play(anim, 0.0, false, true)
@@ -404,7 +489,7 @@ func _spawn_hitbox() -> void:
 	if _atk_kind == "heavy":
 		Sfx.play(self, "player_effort", null, -4.0)
 	Hitbox.spawn(get_parent(), self, pos, facing.angle(), _atk.shape, _atk.size,
-		_atk.damage, _atk.poise, 16, _atk.active + 0.02)
+		int(round(_atk.damage * Progress.damage_mult())), _atk.poise, 16, _atk.active + 0.02)
 	if _atk.shape == "circle":
 		Fx.slash_arc(get_parent(), center, facing.angle(), _atk.size.x + _atk.reach * 0.6,
 			Color(1, 1, 1, 0.9) if _atk_kind == "light" else Color(1, 0.85, 0.5))
@@ -455,7 +540,8 @@ func _block(input: Vector2) -> void:
 		_start_roll(input)
 	elif action != "":
 		_combo = 0
-		_start_attack("light" if action == "attack_light" else "heavy", input)
+		if action != "attack_light" or not _try_critical():
+			_start_attack("light" if action == "attack_light" else "heavy", input)
 	elif not Input.is_action_pressed("block") and _t > 0.1:
 		_to_free()
 
@@ -576,7 +662,7 @@ func receive_hit(h: Hitbox) -> void:
 		Fx.float_text(get_parent(), global_position + Vector2(0, -56), "Parade !", Color(1, 0.9, 0.4))
 		Fx.hitstop(get_tree(), 0.12)
 		Fx.shake(3)
-		if is_instance_valid(h.source) and h.source.has_method("on_parried"):
+		if is_instance_valid(h.source) and h.source.has_method("on_parried") and not h.ranged:
 			h.source.on_parried()
 		return
 	var cost := h.damage * 1.3 + h.poise_damage * 0.3
@@ -610,10 +696,13 @@ func _heal(input: Vector2) -> void:
 	if not _healed and _t >= HEAL_TIME * 0.55:
 		_healed = true
 		flasks -= 1
-		hp = mini(max_hp, hp + HEAL_AMOUNT)
+		var amount := int(max_hp * HEAL_SHARE)
+		hp = mini(max_hp, hp + amount)
 		Sfx.play(self, "heal", null, -4.0, 0.0)
-		Fx.ring(get_parent(), global_position, 4, 22, Color(0.5, 1, 0.5), 0.4)
-		Fx.float_text(get_parent(), global_position + Vector2(0, -50), "+%d" % HEAL_AMOUNT, Color(0.5, 1, 0.5))
+		Fx.ring(get_parent(), global_position, 4, 22, Color(1, 0.8, 0.4), 0.4)
+		if ResourceLoader.exists("res://local/fantasy/fx/fx_heal.png"):
+			Fx.pack("fx_heal", Vector2(0, 2), self, true, 1.3).modulate = Color(1, 1, 1, 0.9)
+		Fx.float_text(get_parent(), global_position + Vector2(0, -50), "+%d" % amount, Color(1, 0.85, 0.5))
 	if _t >= HEAL_TIME:
 		sprite.modulate = Color.WHITE
 		_to_free()
@@ -649,7 +738,84 @@ func die() -> void:
 	_reset_sprite()
 	super.die()
 
+## Health, stamina and flasks from the levels bought at the bonfires.
+func apply_stats(refill: bool) -> void:
+	Progress.ensure_loaded()
+	max_hp = Progress.max_hp()
+	max_stamina = Progress.max_stamina()
+	max_flasks = int(Progress.data.flasks)
+	if refill:
+		hp = max_hp
+		stamina = max_stamina
+		flasks = max_flasks
+	else:
+		hp = mini(hp, max_hp)
+
 func rest() -> void:
-	hp = max_hp
-	flasks = max_flasks
-	stamina = max_stamina
+	apply_stats(true)
+
+## Sitting by a bonfire (the game is paused in its menu meanwhile).
+func sit(on: bool) -> void:
+	if on:
+		_set_lock(null)
+		velocity = Vector2.ZERO
+		state = State.REST
+		_t = 0.0
+		sprite.modulate = Color.WHITE
+		_reset_sprite()
+		sprite.play("block", 6.0)
+	elif state == State.REST:
+		_to_free()
+
+# --- critical hits ---------------------------------------------------------
+
+## A light attack right behind an enemy that does not face the hero
+## (backstab), or at an enemy left open by a parry or a broken guard
+## (riposte), is a critical hit: a long blow, invincible, for big damage.
+func _try_critical() -> bool:
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not e is Actor or e.dead:
+			continue
+		var to: Vector2 = e.global_position - global_position
+		var d := to.length()
+		if d < 1.0 or d > CRIT_RANGE + e.crit_reach():
+			continue
+		var n := to / d
+		if e.can_riposte():
+			_start_critical(e, "riposte")
+			return true
+		var ef = e.get("facing")
+		if ef is Vector2 and e.can_backstab() and ef.dot(n) > 0.55:
+			_start_critical(e, "backstab")
+			return true
+	return false
+
+func _start_critical(e: Actor, kind: String) -> void:
+	state = State.CRIT
+	_t = 0.0
+	_crit_target = e
+	_crit_kind = kind
+	_crit_done = false
+	_spend(Weapons.moves(weapon).light.stamina)
+	facing = (e.global_position - global_position).normalized()
+	velocity = Vector2.ZERO
+	e.begin_critical(self, kind)
+	sprite.modulate = Color.WHITE
+	_reset_sprite()
+	sprite.play("slash3" if sprite.has_anim("slash3") else "slash", 0.0, false, true)
+	Sfx.play(self, "player_effort", null, -4.0)
+
+func _crit() -> void:
+	velocity = Vector2.ZERO
+	sprite.set_progress(minf(0.99, _t / CRIT_TIME))
+	if not _crit_done and _t >= CRIT_TIME * 0.42:
+		_crit_done = true
+		if is_instance_valid(_crit_target) and not _crit_target.dead:
+			var dmg := int(round(Weapons.moves(weapon).light.damage * CRIT_MULT * Progress.damage_mult()))
+			_crit_target.take_critical(dmg, global_position)
+			Fx.hitstop(get_tree(), 0.16)
+			Fx.shake(6)
+			Sfx.play(self, "swing_heavy", null, -2.0)
+			Fx.float_text(get_parent(), _crit_target.global_position + Vector2(-10, -70), "Coup critique !", Color(1, 0.8, 0.3))
+	if _t >= CRIT_TIME:
+		_to_free()

@@ -10,16 +10,17 @@ signal closed
 var _buttons: Array[Button] = []
 var _actions: Array[Callable] = []
 
-## items: [[text, callable], ...]; an empty text adds a gap.
-static func open(parent: Node, title: String, items: Array, footer: String = "") -> GameMenu:
+## items: [[text, callable], ...]; an empty text adds a gap, a null callable
+## a line of information. `focus`: the button selected at first.
+static func open(parent: Node, title: String, items: Array, footer: String = "", focus: int = 0) -> GameMenu:
 	var m := GameMenu.new()
 	m.layer = 10
 	m.process_mode = Node.PROCESS_MODE_ALWAYS
 	parent.add_child(m)
-	m._build(title, items, footer)
+	m._build(title, items, footer, focus)
 	return m
 
-func _build(title: String, items: Array, footer: String) -> void:
+func _build(title: String, items: Array, footer: String, focus: int = 0) -> void:
 	var shade := ColorRect.new()
 	shade.color = Color(0.02, 0.01, 0.04, 0.55)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -53,6 +54,14 @@ func _build(title: String, items: Array, footer: String) -> void:
 			gap.custom_minimum_size = Vector2(0, 4)
 			box.add_child(gap)
 			continue
+		if it[1] == null:
+			var info := Label.new()
+			info.text = it[0]
+			info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			info.add_theme_font_size_override("font_size", 9)
+			info.add_theme_color_override("font_color", Color(0.85, 0.8, 0.7))
+			box.add_child(info)
+			continue
 		n += 1
 		var b := Button.new()
 		b.text = "%d · %s" % [n, it[0]] if n <= 9 else it[0]
@@ -70,7 +79,7 @@ func _build(title: String, items: Array, footer: String) -> void:
 		f.add_theme_color_override("font_color", Color(0.7, 0.66, 0.6))
 		box.add_child(f)
 	if not _buttons.is_empty():
-		_buttons[0].grab_focus.call_deferred()
+		_buttons[clampi(focus, 0, _buttons.size() - 1)].grab_focus.call_deferred()
 
 func _pick(k: int) -> void:
 	_actions[k].call()

@@ -8,6 +8,24 @@ et plus).
 
 ## Contenu du prototype
 
+- **Boucle de Souls** : chaque ennemi tué donne des **âmes**. À la mort (écran « VOUS ÊTES MORT »), elles restent
+  par terre dans une **tache de sang** (verte, aussi marquée sur la carte) : on les récupère avec E en y retournant,
+  mais mourir encore avant les fait perdre pour de bon. Les **feux de camp** sont éteints tant qu'on ne les a pas
+  allumés (sauf celui du départ) ; s'y reposer rend la santé et les fioles, fait revenir les ennemis, devient le point
+  de réapparition et ouvre leur menu : **monter de niveau** avec les âmes (Vigueur → santé, Endurance → endurance,
+  Force → dégâts, chaque niveau coûtant plus cher) et **voyager** entre les feux allumés.
+- **Sauvegarde** automatique (`user://save.json`, dans le navigateur le stockage du site) : âmes, niveau,
+  caractéristiques, feux allumés, boss vaincus, objets pris, tache de sang. L'écran d'accueil propose **Continuer** ou
+  **Nouvelle partie** (avec confirmation).
+- **Objets et coffres** : des lueurs blanches à ramasser et des coffres à ouvrir (maisons, ruines, camp, ville,
+  donjon, hautes terres, ponton) ; quatre **éclats de fiole** portent les fioles de 3 à 7.
+- **Élites** : plus grands, plus sombres et bien plus coriaces, ils gardent les trésors (camp, cimetière, ville,
+  donjon) et rapportent cinq fois plus d'âmes.
+- **Messages au sol** (glyphes orange, E pour lire) : conseils et avertissements laissés par ceux qui sont passés
+  avant.
+- **Brouillard des boss** : un mur de brume blanche entoure leur arène ; E pour le traverser, et plus de sortie tant
+  que le boss vit. Vaincu, il laisse beaucoup d'âmes.
+
 - **Choix du héros** au lancement (aussi dans le menu pause) : le combattant au bouclier rond du pack *Fantasy
   tileset* (combo de trois coups différents, deux coups lourds, pas chassés et course arrière en verrouillage) ou le
   chevalier HD (trois coups dont un tournoyant, vraie roulade, blocage en deux temps), tous deux de SmallScaleInt.
@@ -38,28 +56,40 @@ et plus).
   qu'au début de son armement et ne s'annule qu'en fin de récupération ; une touche pressée pendant une action part à
   sa fin. **Verrouillage** comme dans les Souls : le héros fait face à la cible, se déplace en pas chassés autour
   d'elle, la caméra cadre les deux, et la cible suivante est prise si la première meurt. Roulade avec frames
-  d'invincibilité, endurance, attaques légères (combo x3) et lourdes (super-armure pendant le coup), **bouclier**
-  (blocage, parade au bon moment, riposte à double dégâts), fioles de soin.
+  d'invincibilité (au relâchement de la touche : **la maintenir fait courir**, en dépensant de l'endurance ; sans
+  direction, c'est un **pas en arrière**), endurance, attaques légères (combo x3) et lourdes (super-armure pendant le
+  coup), **attaque en courant**, **bouclier** (blocage, parade au bon moment), fioles de soin.
+- **Coups critiques** : une attaque légère dans le dos d'un ennemi qui ne vous fait pas face (**coup dans le dos**),
+  ou sur un ennemi déséquilibré par une parade ou une garde brisée (**riposte**), est une longue frappe, invincible,
+  à triple dégâts.
+- **Ennemis façon Souls** (`scripts/skeleton.gd`) : ils montent la garde et ne voient que devant eux (on peut les
+  surprendre par derrière), préviennent leurs voisins, tournent autour du héros en attendant une ouverture, puis
+  attaquent avec les coups de leur animation (le coup part sur la bonne image), parfois en enchaînant ; pas plus de
+  deux à la fois. Le squelette à la hache fend, charge et libère une onde magique ; le **mage** recule et lance des
+  traits, la foudre (un cercle au sol : sortez-en) et une onde quand on l'approche ; le **porte-bouclier** pare les
+  coups de face jusqu'à ce que sa garde cède (prenez-le de côté) ; les **brigands** sont rapides, bondissent et
+  reculent après leurs combos ; le **lanceur** jette des couteaux. Frappés hors de leurs attaques, ils vacillent, mais
+  pas indéfiniment ; trop loin de leur poste, ils y retournent et guérissent. Barre de vie et dégâts cumulés au-dessus
+  d'eux.
 - Deux boss (art de Flare), **Glacevive, la Wyverne des cimes** et **Astérion, le Minotaure** : grand coup de hache
-  en arc, saut écrasant et charge, annoncés par une zone rouge. Sous 50 % de vie, ils entrent en rage. Une barrière
-  de lumière ferme l'arène au début du combat.
+  en arc, saut écrasant et charge, annoncés par une zone rouge. Sous 50 % de vie, ils entrent en rage.
 
 ## Commandes
 
 | Action | Clavier / souris | Manette |
 |---|---|---|
 | Se déplacer | ZQSD (AZERTY) / WASD (QWERTY) / flèches | Stick gauche, croix |
-| Roulade | Espace | B |
+| Roulade (au relâchement) ; maintenir : courir ; sans direction : pas en arrière | Espace | B |
 | Bouclier (maintenir) / parade | L ou Maj | LB |
 | Attaque légère | J ou clic gauche | X ou RB |
 | Attaque lourde | K ou clic droit | Y ou RT |
 | Boire une fiole | R | LT |
 | Verrouiller un ennemi / lâcher | I ou clic molette | R3 (clic du stick droit) |
 | Changer de cible verrouillée | U / O ou molette | Stick droit gauche / droite |
-| Se reposer au feu | E | A |
+| Interagir : feu de camp, objet, coffre, tache de sang, brouillard | E | A |
 | Carte | Tab | Select |
 | Téléportation (test) | T, puis un chiffre ou un clic | (menu pause) |
-| Menu pause (reprendre, carte, téléportation, caméra, son, aide, choix du héros, recommencer) | Échap ou P | Start |
+| Menu pause (reprendre, carte, téléportation, caméra, son, aide, menu principal, recommencer) | Échap ou P | Start |
 | Aide | H | |
 | Couper / remettre le son | M | |
 | Sons enregistrés ↔ sons de synthèse | N | |
@@ -68,18 +98,22 @@ et plus).
 
 | Fichier | Rôle |
 |---|---|
-| `scripts/creator.gd` | Écran de choix du héros |
+| `scripts/creator.gd` | Écran d'accueil : choix du héros, continuer ou nouvelle partie |
+| `scripts/progress.gd` | **La progression sauvegardée** : âmes, niveau et caractéristiques, feux, boss, objets, tache de sang |
 | `scripts/hero_config.gd` | Le modèle choisi (sauvegardé dans `user://hero.json`) |
 | `scripts/hd_sprite.gd` | Joue une planche en 8 directions (héros, ennemis, boss) |
 | `scripts/world_map.gd` | **La géographie** : régions, relief, eau, routes, forêts, emplacements (village, champs, ville, camps) |
 | `scripts/game.gd` | Construit le monde à partir de la carte (sol, décor par blocs, relief, maisons, donjon, portails) et le déroulement de la partie |
-| `scripts/game_menu.gd` | Menus du jeu en pause (pause, téléportation) |
+| `scripts/game_menu.gd` | Menus du jeu en pause (pause, feu de camp, niveaux, voyage, téléportation) |
 | `scripts/map_view.gd` | L'écran de carte |
 | `scripts/player.gd` | Le joueur : états, roulade, endurance, combos, bouclier, soin |
 | `scripts/weapons.gd` | **Les armes et leurs styles de combat, sous forme de données** |
 | `scripts/actor.gd` | Base commune : santé, poise (résistance), coups reçus, parade, riposte, mort |
 | `scripts/breakable.gd` | Décor destructible |
-| `scripts/skeleton.gd` | Ennemis ordinaires (squelettes, brigands), un tableau de caractéristiques par type |
+| `scripts/skeleton.gd` | Ennemis ordinaires (squelettes, brigands) : comportement, **types et coups sous forme de données** |
+| `scripts/projectile.gd` | Traits magiques et couteaux lancés |
+| `scripts/enemy_bar.gd` | Barre de vie au-dessus des ennemis |
+| `scripts/pickup.gd`, `bonfire.gd`, `fog_wall.gd` | Objets et tache de sang, feux de camp, brouillard des boss |
 | `scripts/boss.gd` | Les boss (Minotaure, wyverne) et leurs attaques |
 | `scripts/fx.gd`, `sfx.gd`, `music.gd` | Effets visuels, bruitages, musique |
 | `tools/convert_fantasy.py` | Convertit le pack payant de SmallScaleInt vers `local/fantasy/` (dépôt privé) |

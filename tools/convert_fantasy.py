@@ -37,7 +37,7 @@ FLOOR_RE = re.compile(r"^(Ground (A1|A2|A18|B[1-6]|C[1-6]|D1|E1|F1|F3|H1|H4|H9|H
 KEEP_RE = re.compile(r"^(Ground (A([3-9]|1[0-2]|19|2[0-4])|B[1-6]|C[1-6]|E([2-9]|1[0-5])|J([2-9]|10))_[NESW]"
                      r"|Tree .*|Stone .*|Flora .*|WallFlora .*|Misc .*_S|Wall A.*|FirePlace|Torch.*|Chest A1_S"
                      r"|Wall (D|F|G)(1|7)_[NESW]|Roof (C|D)(1|6)_[NESW]|Door A1_[NESW]"
-                     r"|Ground G(12|13|16|22)_[NESW]|Wall B([1-9]|1[01])_[NESW]|Wall E1[5-8]_[NESW])$")
+                     r"|Ground G(12|13|16|22)_[NESW]|Wall B([1-9]|1[01])_[NESW]|Wall E1[5-8]_[NESW]|Chest .*_S)$")
 FLOOR_CELL = (136, 96)  # floor grid cell, the diamond's centre in the middle
 FLOOR_COLS = 14
 
@@ -149,7 +149,7 @@ def convert_tiles():
 # --- characters --------------------------------------------------------------
 CHARS = {"Player": "hero", "Enemy 1": "skeleton_a", "Enemy 2": "skeleton_b", "Enemy 3": "skeleton_c",
          "NPC1": "brigand_a", "NPC2": "brigand_b", "NPC3": "brigand_c"}
-ANIMS = ["Idle", "Walk", "Run", "StrafeLeft", "StrafeRight", "RunBackwards", "Attack1", "Attack2", "Attack4",
+ANIMS = ["Idle", "Walk", "Run", "StrafeLeft", "StrafeRight", "RunBackwards", "Attack1", "Attack2", "Attack3", "Attack4",
          "Attack5", "AttackRun", "Special1", "TakeDamage", "Die", "CrouchIdle", "CrouchRun", "Taunt"]
 CELL, FRAMES = 128, 15
 FEET = [64, 88]
@@ -203,7 +203,13 @@ FX = {"Props/Fire": "flame", "Props/Torch 1": "torch", "Props/PortalIdle": "port
       "Destructible tiles/stone explosion Small": "break_stones", "Destructible tiles/stone explosion large": "break_rocks",
       "Destructible tiles/wood explosion Small": "break_crate", "Destructible tiles/wood explosion large": "break_woodpile",
       # Chips flying off when breakable scenery is hit (played once).
-      "Destructible tiles/Wood damage": "hit_wood", "Destructible tiles/Stone damage": "hit_stone"}
+      "Destructible tiles/Wood damage": "hit_wood", "Destructible tiles/Stone damage": "hit_stone",
+      # Effects: a magic bolt (flies to the right, its head at the anchor), a
+      # shockwave, the level-up swirl, a golden pillar (healing), dust.
+      "Effects/Bolt": "fx_bolt", "Effects/AoE": "fx_aoe", "Effects/LevelUp": "fx_levelup", "Effects/Buff1": "fx_heal",
+      "Effects/Dash": "fx_dash"}
+FX_SCALE = {"fx_aoe": 0.5, "fx_dash": 0.5}  # big ones stored at half size ("scale" in fx.json)
+FX_ANCHORS = {"fx_bolt": (140, 62), "fx_aoe": (256, 262), "fx_levelup": (62, 96), "fx_heal": (62, 100), "fx_dash": (70, 120)}
 
 def convert_fx():
     """Each animation: its frames side by side, cropped to their common box.
@@ -221,16 +227,22 @@ def convert_fx():
             b = im.getbbox()
             if b:
                 box = b if box is None else (min(box[0], b[0]), min(box[1], b[1]), max(box[2], b[2]), max(box[3], b[3]))
-        w, h = box[2] - box[0], box[3] - box[1]
+        sc = FX_SCALE.get(name, 1.0)
+        size = frames[0].width  # the original frame size tells the anchor
+        frames = [im.crop(box) for im in frames]
+        if sc != 1.0:
+            frames = [im.resize((round(im.width * sc), round(im.height * sc)), Image.LANCZOS) for im in frames]
+        w, h = frames[0].width, frames[0].height
         cols = min(len(frames), 4096 // w)  # at most 4096 px wide (WebGL)
         rows = (len(frames) + cols - 1) // cols
         strip = Image.new("RGBA", (w * cols, h * rows))
         for k, im in enumerate(frames):
-            strip.paste(im.crop(box), ((k % cols) * w, (k // cols) * h))
+            strip.paste(im, ((k % cols) * w, (k // cols) * h))
         strip.save(os.path.join(out, name + ".png"), optimize=True)
-        size = frames[0].width
         anchor = (64, 72) if size == 128 else (size // 2, size * 13 // 16)  # 512 px: a 2x2-cell footprint
-        meta[name] = {"frames": len(frames), "cols": cols, "w": w, "h": h, "ax": anchor[0] - box[0], "ay": anchor[1] - box[1]}
+        anchor = FX_ANCHORS.get(name, anchor)
+        meta[name] = {"frames": len(frames), "cols": cols, "w": w, "h": h, "scale": sc,
+                      "ax": round((anchor[0] - box[0]) * sc), "ay": round((anchor[1] - box[1]) * sc)}
     json.dump(meta, open(os.path.join(out, "fx.json"), "w"), indent=1)
     print("fx", list(meta))
 

@@ -15,10 +15,8 @@ const W := WorldMap.W  # the open world is W x W cells
 const HALL := 22  # the dungeon hall is HALL x HALL cells...
 const HALL_AT := Vector2(172, 0)  # ...placed apart from the world
 
-## Remembered across reloads: where the hero comes back after dying, and
-## which bosses are already dead.
-static var spawn_place := "prairie"
-static var defeated := {}
+## The player's progress (souls, level, bonfires, bosses, items, the
+## bloodstain) is kept in Progress, saved on disk.
 
 ## The biome keys are prairie (south), ruins (west), "snow" (east, now a pine
 ## forest) and "caves" (north, now the dead lands).
@@ -173,6 +171,15 @@ static func cell_of(v: Vector2) -> Vector2:
 
 func _ready() -> void:
 	setup_inputs()
+	var testing := false
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--autotest=") or a.begins_with("--profile=") or a.begins_with("--showcase="):
+			testing = true
+	if testing:  # the tests start from a new game and never touch the save
+		Progress.saving = false
+		Progress.data = Progress.fresh()
+	else:
+		Progress.ensure_loaded()
 	_rng.seed = 11
 	_noise.seed = 4
 	_noise.frequency = 0.02
@@ -211,25 +218,14 @@ func _ready() -> void:
 	_build_world()
 	_build_dungeon()
 	for place in PLACES:
-		var b := Bonfire.new()
-		b.position = cell_of(PLACES[place].cell)
-		world.add_child(b)
-		var wood := _tile("fantasy", "FirePlace", Vector2.ZERO, b)
-		wood.show_behind_parent = true
-		_fx("flame", Vector2(0, -4), b).scale *= 1.4
-		var glow := PointLight2D.new()
-		glow.texture = _light_texture()
-		glow.color = Color(1.0, 0.65, 0.3)
-		glow.energy = 0.9
-		glow.texture_scale = 1.2
-		glow.position = Vector2(0, -12)
-		b.add_child(glow)
-		_bonfires[place] = b
+		_make_bonfire(place)
 	_make_portal(PORTAL_IN, PORTAL_OUT + Vector2(-1.5, 0), "Labyrinthe d'Astérion")
 	_make_portal(PORTAL_OUT, PORTAL_IN + Vector2(1.5, 1.5), "Grottes d'ambre")
 
 	player = Player.new()
-	player.position = cell_of(PLACES[spawn_place].cell) + Vector2(0, 56)
+	if not PLACES.has(Progress.data.spawn):
+		Progress.data.spawn = "prairie"
+	player.position = cell_of(PLACES[Progress.data.spawn].cell) + Vector2(0, 56)
 	world.add_child(player)
 	cam = Camera2D.new()
 	cam.position = Vector2(0, -20)
@@ -242,6 +238,9 @@ func _ready() -> void:
 
 	_spawn_enemies()
 	_spawn_bosses()
+	_place_loot()
+	_place_messages()
+	_spawn_stain()
 
 	_modulate = CanvasModulate.new()
 	add_child(_modulate)
@@ -271,7 +270,12 @@ func _ready() -> void:
 			pr.out = a.trim_prefix("--profile=")
 			add_child(pr)
 		if a.begins_with("--autotest="):
-			var t: Node = load("res://tools/autotest.gd").new()
+			# Another test script can be given with --test=<path> (one scenario).
+			var script := "res://tools/autotest.gd"
+			for b in OS.get_cmdline_user_args():
+				if b.begins_with("--test="):
+					script = b.trim_prefix("--test=")
+			var t: Node = load(script).new()
 			t.main = self
 			t.out = a.trim_prefix("--autotest=")
 			add_child(t)
@@ -855,7 +859,7 @@ func _house(i0: int, j0: int, length: int, look: String) -> void:
 	_prop("Misc B27_S", Vector2(i0 + 0.5, j0 + 0.5), 8)
 	_breakable(["break_barrel_a", "break_jar", "break_crate"][(i0 + j0) % 3], cell_pos(i0 + 0.4, j1 + 0.6), 6)
 	if length > 2:
-		_prop("Chest A1_S", Vector2(i1 + 0.3, j0 + 0.4), 6)
+		_chest("house_%d_%d" % [i0, j0], Vector2(i1 + 0.3, j0 + 0.4), "A", "soul_s")
 	# Fade the front away while the hero is inside.
 	var inside := Area2D.new()
 	inside.collision_layer = 0
@@ -880,10 +884,7 @@ func _breakable(name: String, at: Vector2, radius: float = 8.0) -> Breakable:
 		else ("soft" if name in ["break_grass", "break_grass_small", "break_straw", "break_tree_green", "break_tree_yellow"] else "wood")
 	b.sprite = _fx(name, Vector2.ZERO, b)
 	b.chips = func(fx_name: String, where: Vector2) -> void:
-		var fx := _fx(fx_name, where, world)
-		fx.frame = 0
-		fx.sprite_frames.set_animation_loop("default", false)
-		fx.animation_finished.connect(fx.queue_free)
+		Fx.pack(fx_name, where, world, true)
 	var cell := to_cell(at)
 	if level_at(Vector2i(floori(cell.x), floori(cell.y))) == 1:
 		b.sprite.position.y -= LEVEL_HEIGHT
@@ -1090,35 +1091,9 @@ func _brazier(at: Vector2) -> void:
 	b.add_child(light)
 
 ## An animated prop of the pack (fire, torch, portal), looping.
-var _fx_meta := {}
-var _fx_frames := {}
-
+## A looping effect of the pack (flames, portals...), see Fx.pack.
 func _fx(name: String, at: Vector2, parent: Node) -> AnimatedSprite2D:
-	if _fx_meta.is_empty():
-		_fx_meta = JSON.parse_string(FileAccess.get_file_as_string("res://local/fantasy/fx/fx.json"))
-	var m: Dictionary = _fx_meta[name]
-	if not _fx_frames.has(name):
-		var strip: Texture2D = load("res://local/fantasy/fx/%s.png" % name)
-		var sf := SpriteFrames.new()
-		sf.set_animation_speed("default", 14.0)
-		sf.set_animation_loop("default", not (name.begins_with("break_") or name.begins_with("hit_")))
-		for k in int(m.frames):
-			var at_tex := AtlasTexture.new()
-			at_tex.atlas = strip
-			var cols := int(m.get("cols", m.frames))
-			at_tex.region = Rect2((k % cols) * m.w, (k / cols) * m.h, m.w, m.h)
-			sf.add_frame("default", at_tex)
-		_fx_frames[name] = sf
-	var s := AnimatedSprite2D.new()
-	s.sprite_frames = _fx_frames[name]
-	s.centered = false
-	s.offset = -Vector2(m.ax, m.ay)
-	s.scale = Vector2.ONE / float(_anchors.fantasy.res)
-	s.position = at
-	s.play()
-	s.frame = randi() % int(m.frames)
-	parent.add_child(s)
-	return s
+	return Fx.pack(name, at, parent)
 
 func _light_texture() -> GradientTexture2D:
 	var g := GradientTexture2D.new()
@@ -1223,6 +1198,11 @@ func _spawn_enemies() -> void:
 		_add_enemy(["pack/brigand_a", "pack/brigand_b", "pack/brigand_c", "pack/brigand_b"][k], WorldMap.CAMP + Vector2.RIGHT.rotated(a) * 2.0)
 		_add_enemy(["pack/skeleton_b", "pack/skeleton_a", "pack/skeleton_b", "pack/skeleton_c"][k], WorldMap.GRAVEYARD + Vector2.RIGHT.rotated(a) * 2.3)
 		_add_enemy(["pack/skeleton_a", "pack/skeleton_c", "pack/skeleton_a", "pack/skeleton_c"][k], WorldMap.CITY + Vector2.RIGHT.rotated(a) * 5.4)
+	# Elites guarding the treasures.
+	_add_enemy("pack/brigand_b", WorldMap.CAMP + Vector2(-1.7, -0.3), true)
+	_add_enemy("pack/skeleton_c", WorldMap.GRAVEYARD + Vector2(0.5, -2.3), true)
+	_add_enemy("pack/skeleton_a", WorldMap.CITY + Vector2(1.6, 1.2), true)
+	_add_enemy("pack/skeleton_c", HALL_AT + Vector2(17.6, 5.6), true)
 	var guards := []
 	for e in theme.dungeon.enemies:
 		for k in e[1]:
@@ -1231,17 +1211,19 @@ func _spawn_enemies() -> void:
 	for k in mini(guards.size(), spots.size()):
 		_add_enemy(guards[k], HALL_AT + spots[k])
 
-func _add_enemy(model: String, c: Vector2) -> void:
+func _add_enemy(model: String, c: Vector2, elite := false) -> void:
 	var s := SkeletonEnemy.new()
 	s.flare_name = model
+	s.elite = elite
 	s.position = cell_of(c)
 	s.player = player
 	world.add_child(s)
 	_enemies.append(s)
+	s.died.connect(_on_enemy_died.bind(s))
 
 func _spawn_bosses() -> void:
 	for model in ARENAS:
-		if defeated.has(model):
+		if Progress.data.defeated.has(model):
 			continue
 		var b := Boss.new()
 		b.flare_name = model
@@ -1251,6 +1233,7 @@ func _spawn_bosses() -> void:
 		b.died.connect(_on_boss_died.bind(model))
 		b.phase_changed.connect(func(_p): music.play("boss_phase2", 2.5))
 		_bosses[model] = b
+		_make_fog(model)
 	boss = _bosses.get("minotaur")
 
 func arena_entry() -> Vector2:
@@ -1284,19 +1267,7 @@ func _physics_process(delta: float) -> void:
 		_update_area()
 		_update_biome(false)
 	_update_heights()
-	var near_fire := ""
-	for place in _bonfires:
-		if player.global_position.distance_to(_bonfires[place].global_position) < 40:
-			near_fire = place
-	var fighting := not _sealed.is_empty()
-	hud.hint = "[E] Se reposer au feu" if near_fire != "" and not fighting and not player.dead else ""
-	if near_fire != "" and not fighting and Input.is_action_just_pressed("interact"):
-		_rest(near_fire)
-	for model in _bosses:
-		var b: Boss = _bosses[model]
-		if is_instance_valid(b) and not b.dead and not _sealed.has(model) \
-				and _arena_dist(player.global_position, model) < ARENAS[model].radius - 0.8:
-			_close_arena(model)
+	_update_uses()
 	if Input.is_action_just_pressed("teleport") and not player.dead:
 		open_teleport_menu()
 	if Engine.get_physics_frames() <= _menu_guard:
@@ -1311,15 +1282,6 @@ func _physics_process(delta: float) -> void:
 		Fx.float_text(world, player.global_position + Vector2(0, -60), Sfx.toggle_set(self), Color(0.8, 0.9, 1))
 	if Input.is_action_just_pressed("mute"):
 		AudioServer.set_bus_mute(0, not AudioServer.is_bus_mute(0))
-
-func _rest(place: String) -> void:
-	spawn_place = place
-	player.rest()
-	_spawn_enemies()
-	Sfx.play(self, "bonfire", null, -2.0, 0.0)
-	Fx.ring(world, _bonfires[place].global_position, 4, 60, Color(1, 0.7, 0.3), 0.6)
-	hud.flash_message("Feu allumé", Color(1, 0.75, 0.35), "Santé et fioles restaurées. Les ennemis sont revenus.")
-	get_tree().create_timer(2.0).timeout.connect(func(): if not _ended: hud.message = "")
 
 ## Music, ambience and light follow the biome the hero is in.
 func _update_biome(force: bool) -> void:
@@ -1342,16 +1304,385 @@ func _update_biome(force: bool) -> void:
 		hud.flash_message(info.name, Color(0.9, 0.85, 0.7))
 		get_tree().create_timer(2.0).timeout.connect(func(): if not _ended and hud.message == info.name: hud.message = "")
 
-## A ring of blue light closes a boss arena.
+## The hero went through the fog: the boss wakes up, its arena is sealed.
 func _close_arena(model: String) -> void:
-	var a: Dictionary = ARENAS[model]
 	boss = _bosses[model]
+	_sealed[model] = _fogs[model]
+	Fx.shake(5)
+	Sfx.play(self, "parry", null, -2.0, 0.0)
+	boss.activate()
+	music.play("boss_phase1", 1.0)
+	hud.boss = boss
+	hud.show_boss = true
+	hud.announce(boss.boss_name, Color(0.9, 0.8, 0.6), "", 2.0)
+
+func _on_boss_died(model: String) -> void:
+	Progress.data.defeated[model] = true
+	var b: Boss = _bosses[model]
+	_gain_souls(b.souls(), b.global_position)
+	Fx.hitstop(get_tree(), 0.25)
+	hud.show_boss = false
+	music.stop(2.5)
+	get_tree().create_timer(1.2).timeout.connect(func(): Sfx.play(self, "victory", null, -2.0, 0.0))
+	hud.flash_message("GRAND ENNEMI ABATTU", Color(0.95, 0.8, 0.35), b.boss_name)
+	get_tree().create_timer(4.0).timeout.connect(func():
+		_lift_fog(model)
+		_sealed.erase(model)
+		if not _ended:
+			hud.message = ""
+		_biome = ""
+		_update_biome(true))
+
+## Death: the souls carried stay on the ground where the hero fell (a
+## bloodstain), to be taken back... unless he dies again before that.
+func _on_player_died() -> void:
+	_ended = true
+	var d := Progress.data
+	var souls := int(d.souls)
+	var at := player.global_position
+	d.stain = {} if souls <= 0 else {"x": at.x, "y": at.y, "souls": souls}
+	d.souls = 0
+	d.deaths = int(d.deaths) + 1
+	Progress.save()
+	hud.death_screen()
+	music.stop(1.0)
+	Sfx.play(self, "you_died", null, -2.0, 0.0)
+	var t := create_tween()
+	t.tween_interval(4.2)
+	t.tween_property(hud, "fade", 1.0, 1.2)
+	t.tween_callback(get_tree().reload_current_scene)
+
+# --- things to use with [E] ------------------------------------------------------
+
+## Bonfires, items, chests, the bloodstain, the fog of the bosses. Each one:
+## "at" (world position) and "r" (reach), or "near" (Callable(hero position)
+## -> distance, INF when out of reach); "text" (String, or Callable ->
+## String, "" when it cannot be used now) and "act" (Callable).
+var _uses: Array = []
+
+func _add_use(u: Dictionary) -> Dictionary:
+	_uses.append(u)
+	return u
+
+func _update_uses() -> void:
+	if player.dead or not player.state in [Player.State.FREE, Player.State.BLOCK]:
+		hud.hint = ""
+		return
+	var p := player.global_position
+	var best := {}
+	var best_d := INF
+	for u in _uses:
+		var d := INF
+		if u.has("near"):
+			d = u.near.call(p)
+		elif p.distance_to(u.at) < u.r:
+			d = p.distance_to(u.at)
+		if d < best_d:
+			var text: String = u.text.call() if u.text is Callable else u.text
+			if text != "":
+				best_d = d
+				best = u
+				best.shown = text
+	hud.hint = "" if best.is_empty() else "[E] " + best.shown
+	if not best.is_empty() and Input.is_action_just_pressed("interact"):
+		best.act.call()
+
+# --- bonfires ------------------------------------------------------------------
+
+func _make_bonfire(place: String) -> void:
+	var b := Bonfire.new()
+	b.position = cell_of(PLACES[place].cell)
+	world.add_child(b)
+	var wood := _tile("fantasy", "FirePlace", Vector2.ZERO, b)
+	wood.show_behind_parent = true
+	_bonfires[place] = b
+	if place in Progress.data.lit:
+		_kindle(place)
+	_add_use({"at": b.position, "r": 40.0, "text": _bonfire_text.bind(place), "act": _bonfire_act.bind(place)})
+
+func _bonfire_text(place: String) -> String:
+	if not _sealed.is_empty():
+		return ""
+	return "Se reposer au feu" if _bonfires[place].lit else "Allumer le feu"
+
+func _bonfire_act(place: String) -> void:
+	if _bonfires[place].lit:
+		_rest(place)
+	else:
+		_light_bonfire(place)
+
+## The flames of a lit bonfire.
+func _kindle(place: String) -> void:
+	var b: Bonfire = _bonfires[place]
+	b.lit = true
+	_fx("flame", Vector2(0, -4), b).scale *= 1.4
+	var glow := PointLight2D.new()
+	glow.texture = _light_texture()
+	glow.color = Color(1.0, 0.65, 0.3)
+	glow.energy = 0.9
+	glow.texture_scale = 1.2
+	glow.position = Vector2(0, -12)
+	b.add_child(glow)
+
+func _light_bonfire(place: String) -> void:
+	_kindle(place)
+	if not place in Progress.data.lit:
+		Progress.data.lit.append(place)
+	Progress.save()
+	var at: Vector2 = _bonfires[place].global_position
+	Sfx.play(self, "bonfire", null, 0.0, 0.0)
+	Sfx.flare(self, "environment/open_fire", at, 0.0)
+	Fx.ring(world, at, 4, 70, Color(1, 0.7, 0.3), 0.7, 3)
+	Fx.pack("fx_levelup", at + Vector2(0, 4), world, true, 1.2)
+	hud.announce("FEU ALLUMÉ", Color(1.0, 0.78, 0.35), "", 2.5)
+
+## Resting: health, stamina and flasks back, the enemies back too, and the
+## hero will come back here after dying. Then the bonfire's menu.
+func _rest(place: String) -> void:
+	Progress.data.spawn = place
+	player.rest()
+	player.sit(true)
+	_spawn_enemies()
+	Progress.save()
+	Sfx.play(self, "bonfire", null, -2.0, 0.0)
+	Fx.ring(world, _bonfires[place].global_position, 4, 60, Color(1, 0.7, 0.3), 0.6)
+	_open_bonfire_menu(place)
+
+func _open_bonfire_menu(place: String, focus: int = 0) -> void:
+	var d := Progress.data
+	_open_menu("Feu · " + PLACES[place].label, [
+		["Monter de niveau", _open_level_menu.bind(place, 0)],
+		["Voyager", _open_travel_menu.bind(place)],
+		["", null],
+		["Se relever", _close_menu],
+	], "Niveau %d · %d âmes · %d fioles" % [d.level, d.souls, d.flasks], focus)
+
+## Souls buy levels, one characteristic at a time; each level costs more.
+func _open_level_menu(place: String, focus: int = 0) -> void:
+	var d := Progress.data
+	var cost := Progress.level_cost()
+	var items := [["Âmes : %d    ·    niveau %d : %d âmes" % [d.souls, d.level + 1, cost], null], ["", null]]
+	for stat in Progress.STATS:
+		var lv := int(d[stat])
+		var effect := ""
+		match stat:
+			"vigor": effect = "santé %d → %d" % [Progress.max_hp(), Progress.max_hp() + 14]
+			"endurance": effect = "endurance %d → %d" % [int(Progress.max_stamina()), int(Progress.max_stamina()) + 9]
+			"strength": effect = "dégâts %s → %s" % [Progress.damage_text(lv), Progress.damage_text(lv + 1)]
+		items.append(["%s %d → %d  (%s)" % [Progress.STATS[stat][0], lv, lv + 1, effect],
+			_level_up.bind(stat, place, items.size() - 2)])
+	items.append(["", null])
+	items.append(["Retour", _open_bonfire_menu.bind(place, 0)])
+	_open_menu("Niveau %d" % d.level, items,
+		"Assez d'âmes : choisissez quoi renforcer" if int(d.souls) >= cost else "Pas assez d'âmes pour monter de niveau", focus)
+
+func _level_up(stat: String, place: String, focus: int) -> void:
+	if Progress.level_up(stat):
+		player.apply_stats(true)
+		Sfx.flare(self, "level_up", null, -2.0)
+		var fx := Fx.pack("fx_levelup", Vector2(0, 2), player, true, 1.1)
+		fx.process_mode = Node.PROCESS_MODE_ALWAYS
+	else:
+		Sfx.flare(self, "no_mana", null, -4.0)
+	_open_level_menu(place, focus)
+
+func _open_travel_menu(place: String) -> void:
+	var items := []
+	for p in PLACES:
+		if p in Progress.data.lit and p != place:
+			items.append([PLACES[p].label, _travel.bind(p)])
+	if items.is_empty():
+		items.append(["Aucun autre feu allumé", null])
+	items.append(["", null])
+	items.append(["Retour", _open_bonfire_menu.bind(place, 1)])
+	_open_menu("Voyager", items, "D'un feu allumé à un autre")
+
+func _travel(place: String) -> void:
+	_close_menu()
+	player.sit(true)
+	Sfx.flare(self, "powers/teleport", null, -4.0)
+	var t := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)  # goes on under the menu
+	t.tween_property(hud, "fade", 1.0, 0.4)
+	t.tween_callback(func():
+		teleport_to_cell(PLACES[place].cell)
+		_rest(place))
+	t.tween_property(hud, "fade", 0.0, 0.6)
+
+# --- souls ---------------------------------------------------------------------
+
+func _on_enemy_died(e: SkeletonEnemy) -> void:
+	Progress.data.kills = int(Progress.data.kills) + 1
+	_gain_souls(e.souls, e.global_position)
+
+func _gain_souls(n: int, from: Vector2) -> void:
+	Progress.add_souls(n)
+	Progress.save()
+	hud.souls_gained(n)
+	for k in clampi(n / 40, 1, 6):
+		Fx.soul(world, from + Vector2(randf_range(-8, 8), -26 + randf_range(-6, 6)), player)
+
+var _stain: Pickup
+
+## The bloodstain of the last death, with the souls lost there.
+func _spawn_stain() -> void:
+	var st: Dictionary = Progress.data.stain
+	if st.is_empty() or int(st.get("souls", 0)) <= 0:
+		return
+	var at := Vector2(float(st.x), float(st.y))
+	_stain = Pickup.new()
+	_stain.stain = true
+	_stain.position = at
+	_stain.lift = height_at(at)
+	if _stain.lift > LEVEL_HEIGHT * 0.5:
+		_stain.z_index = 1
+	world.add_child(_stain)
+	var u := {"at": at, "r": 26.0, "text": "Récupérer les âmes (%d)" % int(st.souls)}
+	u.act = func() -> void:
+		var n := int(Progress.data.stain.get("souls", 0))
+		Progress.data.stain = {}
+		_uses.erase(u)
+		_stain.queue_free()
+		_gain_souls(n, at)
+		Sfx.flare(self, "flying_loot", null, -2.0)
+		Fx.ring(world, at, 4, 40, Color(0.5, 1.0, 0.6), 0.5, 2)
+		Fx.float_text(world, at + Vector2(-30, -50), "Âmes récupérées", Color(0.7, 1.0, 0.75))
+	_add_use(u)
+
+# --- items and chests ------------------------------------------------------------
+
+const LOOT := {
+	"shard": {"name": "Éclat de fiole", "desc": "Une fiole de soin de plus"},
+	"soul_s": {"name": "Âme d'un soldat égaré", "desc": "+200 âmes", "souls": 200},
+	"soul_m": {"name": "Âme d'un chevalier errant", "desc": "+500 âmes", "souls": 500},
+	"soul_l": {"name": "Âme d'un héros oublié", "desc": "+1200 âmes", "souls": 1200},
+}
+
+## Items and chests of the world, each found once (Progress.data.taken).
+## Four flask shards: in the brigands' camp, the ruined city, the graveyard
+## and the Minotaur's labyrinth.
+func _place_loot() -> void:
+	if not map.pier.is_empty():
+		_item("pier", Vector2(map.pier[map.pier.size() - 1]) + Vector2(0.5, 0.5), "soul_s")
+	_item("graveyard", WorldMap.GRAVEYARD + Vector2(0.5, -3.4), "shard")
+	_chest("camp", WorldMap.CAMP + Vector2(-0.9, -0.9), "A", "shard")
+	_chest("city", WorldMap.CITY + Vector2(0.3, 1.7), "B", "shard")
+	_chest("dungeon", HALL_AT + Vector2(19.2, 4.6), "B", "shard")
+	_item("dungeon_arena", ARENAS.minotaur.center + Vector2(-2.0, -2.0), "soul_l")
+	var n := 0
+	for r in map.ruins_rooms:
+		if n < 3:
+			_chest("ruin_%d" % n, Vector2(r.position) + Vector2(0.75, 0.75), "A", "soul_m" if n == 0 else "soul_s")
+		n += 1
+	# On the highlands, one per region, where the climb leads.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var picked := {}
+	for k in 4000:
+		var c := Vector2i(rng.randi_range(4, W - 5), rng.randi_range(4, W - 5))
+		var region := map.region_at(c)
+		if picked.has(region) or level_at(c) != 1 or not map.is_free(c) or _occupied.has(c):
+			continue
+		var inner := true
+		for dc in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if level_at(c + dc) != 1:
+				inner = false
+		if inner:
+			picked[region] = true
+			_item("high_" + region, Vector2(c) + Vector2(0.5, 0.5), "soul_m")
+
+## Messages left on the ground, Souls style: advice (or a warning) to read.
+const MESSAGES := [
+	[Vector2(0.5, -3.0), "prairie", "Essayez la roulade\n(Espace : relâcher pour rouler, maintenir pour courir)"],
+	[Vector2(-2.6, 3.4), "camp", "Trésor devant… mais aussi un gardien"],
+	[Vector2(1.5, 3.6), "city", "Bouclier devant : essayez de frapper par derrière"],
+	[Vector2(0.5, 1.0), "graveyard", "Mage devant : roulez hors du cercle de foudre"],
+	[Vector2(2.4, 2.0), "portal", "Danger en bas, mais aussi des âmes"],
+	[Vector2(2.0, 1.0), "village", "Pas d'ennemis ici. Repos ?"],
+	[Vector2(-4.0, 0.0), "lake", "Vue magnifique devant"],
+]
+
+func _place_messages() -> void:
+	var anchors := {"prairie": Vector2(PLACES.prairie.cell), "camp": WorldMap.CAMP, "city": WorldMap.CITY,
+		"graveyard": WorldMap.GRAVEYARD, "portal": WorldMap.PORTAL, "village": WorldMap.VILLAGE,
+		"lake": Vector2(WorldMap.LANDING)}
+	for m in MESSAGES:
+		var cell: Vector2 = anchors[m[1]] + m[0]
+		var at := cell_of(cell)
+		var p := Pickup.new()
+		p.message = true
+		p.position = at
+		p.z_index = -2  # on the ground
+		p.lift = height_at(at)
+		world.add_child(p)
+		var text: String = m[2]
+		_add_use({"at": at, "r": 22.0, "text": "Lire le message", "act": func() -> void:
+			hud.announce(text.get_slice("\n", 0), Color(1.0, 0.7, 0.35), text.get_slice("\n", 1) if "\n" in text else "", 3.5)})
+
+func _item(key: String, cell: Vector2, loot: String) -> void:
+	if Progress.data.taken.has(key):
+		return
+	var at := cell_of(cell)
+	var p := Pickup.new()
+	p.position = at
+	p.lift = height_at(at)
+	if p.lift > LEVEL_HEIGHT * 0.5:
+		p.z_index = 1
+	world.add_child(p)
+	var u := {"at": at, "r": 24.0, "text": "Ramasser"}
+	u.act = func() -> void:
+		_uses.erase(u)
+		p.queue_free()
+		_take(key, loot)
+	_add_use(u)
+
+## A chest of the pack ("A" wooden, "B" gilded), opened once.
+func _chest(key: String, cell: Vector2, look: String, loot: String) -> void:
+	var at := cell_of(cell)
+	var closed := "Chest A1_S" if look == "A" else "Chest B1_S"
+	var opened := "Chest A2_S" if look == "A" else "Chest B2_S"
+	var node := Node2D.new()
+	node.position = at
+	_chunk(cell).add_child(node)
+	var s := _tile("fantasy", opened if Progress.data.taken.has(key) else closed, Vector2.ZERO, node)
+	_collide(at, 7)
+	_occupied[Vector2i(cell)] = true
+	if Progress.data.taken.has(key):
+		return
+	var u := {"at": at, "r": 28.0, "text": "Ouvrir le coffre"}
+	u.act = func() -> void:
+		_uses.erase(u)
+		s.queue_free()
+		_tile("fantasy", opened, Vector2.ZERO, node)
+		Sfx.flare(self, "wood_open", at, 0.0)
+		_take(key, loot)
+	_add_use(u)
+
+func _take(key: String, loot: String) -> void:
+	var l: Dictionary = LOOT[loot]
+	Progress.data.taken[key] = true
+	if l.has("souls"):
+		_gain_souls(int(l.souls), player.global_position)
+	if loot == "shard":
+		Progress.data.flasks = mini(Progress.FLASKS_MAX, int(Progress.data.flasks) + 1)
+		player.max_flasks = int(Progress.data.flasks)
+		player.flasks = mini(player.flasks + 1, player.max_flasks)
+	Progress.save()
+	Sfx.flare(self, "flying_loot", null, -2.0)
+	hud.announce(l.name, Color(0.95, 0.88, 0.7), l.desc, 2.5)
+
+# --- the fog of the bosses -------------------------------------------------------
+
+var _fogs := {}  # model -> the fog wall (a StaticBody2D)
+
+## A wall of white fog around a boss's arena: [E] to go through, and no way
+## back until the boss is dead.
+func _make_fog(model: String) -> void:
+	var a: Dictionary = ARENAS[model]
 	var ring := StaticBody2D.new()
 	ring.collision_layer = 1
 	var pts := PackedVector2Array()
 	for k in 49:
-		var c: Vector2 = a.center + Vector2.RIGHT.rotated(k * TAU / 48.0) * (a.radius + 0.3)
-		pts.append(cell_of(c))
+		pts.append(cell_of(a.center + Vector2.RIGHT.rotated(k * TAU / 48.0) * (a.radius + 0.3)))
 	for k in 48:
 		var cs := CollisionShape2D.new()
 		var seg := SegmentShape2D.new()
@@ -1359,45 +1690,56 @@ func _close_arena(model: String) -> void:
 		seg.b = pts[k + 1]
 		cs.shape = seg
 		ring.add_child(cs)
-	var line := Node2D.new()
-	line.z_index = -4
-	line.draw.connect(func():
-		line.draw_polyline(pts, Color(0.4, 0.6, 1.0, 0.85), 3.0)
-		line.draw_polyline(pts, Color(0.6, 0.8, 1.0, 0.35), 9.0))
-	ring.add_child(line)
-	add_child(ring)
-	_sealed[model] = ring
-	Fx.shake(5)
-	Sfx.play(self, "parry", null, -2.0, 0.0)
-	boss.activate()
-	music.play("boss_phase1", 1.0)
-	hud.boss = boss
-	hud.show_boss = true
-	hud.flash_message(boss.boss_name, Color(0.9, 0.8, 0.6))
-	get_tree().create_timer(2.0).timeout.connect(func(): if not _ended: hud.message = "")
+	var light := _light_texture()
+	ring.y_sort_enabled = true  # its pieces of fog are sorted with the scenery
+	for k in 48:
+		var fog := FogWall.new()
+		fog.position = pts[k]
+		fog.next_rel = pts[k + 1] - pts[k]
+		fog.light = light
+		ring.add_child(fog)
+	world.add_child(ring)
+	_fogs[model] = ring
+	_add_use({"near": _fog_near.bind(model), "text": _fog_text.bind(model), "act": _cross_fog.bind(model)})
 
-func _on_boss_died(model: String) -> void:
-	defeated[model] = true
-	Fx.hitstop(get_tree(), 0.25)
-	hud.show_boss = false
-	music.stop(2.5)
-	get_tree().create_timer(1.2).timeout.connect(func(): Sfx.play(self, "victory", null, -2.0, 0.0))
-	hud.flash_message("ENNEMI ABATTU", Color(0.95, 0.8, 0.35), _bosses[model].boss_name)
-	get_tree().create_timer(4.0).timeout.connect(func():
-		if is_instance_valid(_sealed.get(model)):
-			_sealed[model].queue_free()
-		_sealed.erase(model)
-		if not _ended:
-			hud.message = ""
-		_biome = ""
-		_update_biome(true))
+func _fog_near(p: Vector2, model: String) -> float:
+	var a: Dictionary = ARENAS[model]
+	var c := to_cell(p)
+	var d := absf(c.distance_to(a.center) - (a.radius + 0.3))
+	return d * 54.0 if d < 0.9 and not _sealed.has(model) and _fogs.has(model) else INF
 
-func _on_player_died() -> void:
-	_ended = true
-	hud.flash_message("VOUS ÊTES MORT", Color(0.75, 0.08, 0.06))
-	music.stop(1.0)
-	Sfx.play(self, "you_died", null, -2.0, 0.0)
-	get_tree().create_timer(3.5).timeout.connect(get_tree().reload_current_scene)
+func _fog_text(model: String) -> String:
+	var a: Dictionary = ARENAS[model]
+	var inside: bool = to_cell(player.global_position).distance_to(a.center) < a.radius + 0.3
+	return "" if inside else "Traverser le brouillard"
+
+func _cross_fog(model: String) -> void:
+	var a: Dictionary = ARENAS[model]
+	var c := to_cell(player.global_position)
+	var dir: Vector2 = (a.center - c).normalized()
+	var to := cell_of(a.center - dir * (a.radius - 1.0))
+	player.sit(true)
+	player.sprite.play("walk", 6.0)
+	player.facing = (to - player.global_position).normalized()
+	player.collision_mask = 0
+	Sfx.flare(self, "environment/stone_open", null, -6.0)
+	var t := create_tween()
+	t.tween_property(player, "global_position", to, 0.9)
+	t.tween_callback(func():
+		player.collision_mask = 1 | 4
+		player.sit(false)
+		player.state = Player.State.FREE
+		_close_arena(model))
+
+func _lift_fog(model: String) -> void:
+	if not _fogs.has(model):
+		return
+	var ring: StaticBody2D = _fogs[model]
+	_fogs.erase(model)
+	ring.collision_layer = 0
+	var t := ring.create_tween()
+	t.tween_property(ring, "modulate:a", 0.0, 2.0)
+	t.tween_callback(ring.queue_free)
 
 # --- HUD and teleport menu -----------------------------------------------------
 
@@ -1435,18 +1777,19 @@ func teleport_places() -> Array:
 	out.append(["Ville en ruine", WorldMap.CITY + Vector2(0.5, 5.5)])
 	out.append(["Camp des brigands", WorldMap.CAMP + Vector2(0.6, 1.4)])
 	for model in ARENAS:
-		out.append([ARENAS[model].label + (" (vaincu)" if defeated.has(model) else ""), ARENAS[model].entry])
+		out.append([ARENAS[model].label + (" (vaincu)" if Progress.data.defeated.has(model) else ""), ARENAS[model].entry])
 	return out
 
-func _open_menu(title: String, items: Array, footer: String = "") -> void:
+func _open_menu(title: String, items: Array, footer: String = "", focus: int = 0) -> void:
 	if _menu:
 		_menu.queue_free()
 	get_tree().paused = true
-	_menu = GameMenu.open(self, title, items, footer)
+	_menu = GameMenu.open(self, title, items, footer, focus)
 	_menu.closed.connect(func():
 		_menu = null
 		_menu_guard = Engine.get_physics_frames() + 2
-		get_tree().paused = false)
+		get_tree().paused = false
+		player.sit(false))
 
 func _close_menu() -> void:
 	if _menu:
@@ -1477,7 +1820,7 @@ func open_pause_menu() -> void:
 			Sfx.toggle_set(self)
 			open_pause_menu()],
 		["", null],
-		["Créateur de personnage", func():
+		["Menu principal", func():
 			get_tree().paused = false
 			get_tree().change_scene_to_file("res://scenes/creator.tscn")],
 		["Recommencer au dernier feu", func():

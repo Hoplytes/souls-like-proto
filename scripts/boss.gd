@@ -11,8 +11,8 @@ enum State { DORMANT, CHASE, THRUST_WINDUP, THRUST, LEAP_WINDUP, LEAP_AIR, CHARG
 const SPEED := 48.0
 ## Bosses by Flare model: display name, Flare sound prefix and health.
 const MODELS := {
-	"minotaur": {"name": "Astérion, le Minotaure", "sound": "minotaur", "hp": 450},
-	"wyvern_water": {"name": "Glacevive, la Wyverne des cimes", "sound": "wyvern", "hp": 520},
+	"minotaur": {"name": "Astérion, le Minotaure", "sound": "minotaur", "hp": 450, "souls": 2000},
+	"wyvern_water": {"name": "Glacevive, la Wyverne des cimes", "sound": "wyvern", "hp": 520, "souls": 2500},
 }
 var boss_name := "Astérion, le Minotaure"
 const CLEAVE_REACH := 40.0
@@ -223,7 +223,24 @@ func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 	var hit := super.take_hit(dmg, poise_dmg, from)
 	if hit and not dead and randf() < 0.35:
 		Sfx.play(self, "boss_hurt", global_position, -2.0)
-	if hit and phase == 1 and hp <= max_hp / 2 and not dead:
+	if hit:
+		_check_phase()
+	return hit
+
+func take_critical(dmg: int, from: Vector2) -> void:
+	super.take_critical(dmg, from)
+	Sfx.play(self, "boss_hurt", global_position, 0.0)
+	_check_phase()
+
+func crit_reach() -> float:
+	return 18.0
+
+func souls() -> int:
+	return MODELS.get(flare_name, MODELS.minotaur).souls
+
+## Below half health: phase 2, faster and fiercer.
+func _check_phase() -> void:
+	if phase == 1 and hp <= max_hp / 2 and not dead:
 		phase = 2
 		sprite.modulate = base_modulate()
 		Fx.ring(get_parent(), global_position, 10, 120, Color(1, 0.2, 0.2), 0.6, 4)
@@ -231,7 +248,6 @@ func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 		Fx.shake(8)
 		Sfx.play(self, "boss_rage", global_position, 3.0, 0.0)
 		phase_changed.emit(2)
-	return hit
 
 ## A parried boss loses a chunk of poise and its combo; when the poise
 ## breaks it is staggered and open to a riposte.

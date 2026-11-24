@@ -6,6 +6,8 @@ var damage := 10
 var poise_damage := 10
 var source: Node2D
 var unblockable := false
+## Thrown or cast from afar: a parry deflects it without staggering the thrower.
+var ranged := false
 var _hit := {}
 
 static func spawn(parent: Node, src: Node2D, pos: Vector2, rot: float, shape_kind: String,

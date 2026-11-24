@@ -89,7 +89,10 @@ const PACK_SHEETS := {
 	"idle": "Idle", "walk": "Run", "march": "Walk", "slash": "Attack1", "slash2": "AttackRun", "slash3": "Attack2",
 	"slash_heavy": "Attack4", "slash_heavy2": "Special1", "thrust": "Attack1", "hurt": "Die", "stagger": "TakeDamage", "block": "CrouchIdle",
 	"block_start": "Attack5", "jump": "CrouchRun", "heal": "Taunt", "strafe_left": "StrafeLeft",
-	"strafe_right": "StrafeRight", "back": "RunBackwards",
+	"strafe_right": "StrafeRight", "back": "RunBackwards", "crouch": "CrouchIdle", "crouch_run": "CrouchRun",
+	# The enemies play the pack's attacks by their own names.
+	"Attack1": "Attack1", "Attack2": "Attack2", "Attack3": "Attack3", "Attack4": "Attack4", "Attack5": "Attack5",
+	"AttackRun": "AttackRun", "Special1": "Special1", "Taunt": "Taunt", "TakeDamage": "TakeDamage", "Die": "Die",
 }
 const FLARE_SHEETS := {"idle": "stance", "walk": "run", "slash": "swing", "slash_heavy": "swing", "thrust": "swing",
 	"hurt": "die", "stagger": "hit", "block": "block", "block_start": "block", "jump": "run", "heal": "stance"}
