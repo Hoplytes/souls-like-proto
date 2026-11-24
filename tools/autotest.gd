@@ -173,7 +173,7 @@ func _run() -> void:
 	var p: Player = main.player
 	await _wait(1.0)
 	await _shot("01_start")
-	log_lines.append("hero: %s, weapon %s" % ["HD knight" if p.hd else "modular", p.weapon])
+	log_lines.append("hero: %s, weapon %s" % [HeroConfig.data.model, p.weapon])
 	# Walk up to the first skeleton and fight it.
 	Input.action_press("move_up")
 	await _wait(1.6)

@@ -3,7 +3,7 @@ extends Actor
 ## The player: movement, roll with invincibility frames, stamina, light and
 ## heavy attacks with combos (moveset set by the weapon), block and parry,
 ## healing flasks. Drawn as the modular hero of the character creator
-## (AvatarSprite), or as the HD knight when that model is chosen.
+## fighter with the round shield of the fantasy pack, or as the HD knight.
 
 signal stats_changed
 
@@ -68,6 +68,7 @@ var hd := false
 ## three different swings, strafing steps and a backward run.
 var pack := false
 var _roll_class := "medium"
+var _heavy_k := 0
 ## Lock-on (Souls): the hero keeps facing the locked enemy and strafes around it.
 const LOCK_RANGE := 230.0  # px to pick a target
 const LOCK_BREAK := 320.0  # px at which the lock is lost
@@ -78,19 +79,14 @@ var _stick_flicked := false
 func make_sprite():
 	if pack:
 		return HdSprite.flare("pack/hero")
-	if hd:
-		var k := HdSprite.new()
-		if Game.fantasy:  # same artist as the pack: same scale as its characters
-			k.set_res(128.0 / 96.0)
-		return k
-	var a := AvatarSprite.new()
-	a.build(HeroConfig.data)
-	return a
+	var k := HdSprite.new()
+	k.set_res(128.0 / 96.0)  # same artist as the pack: drawn at the scale of its characters
+	return k
 
 func _ready() -> void:
 	pack = HeroConfig.data.model == "pack_hero" and HdSprite.pack_available()
-	hd = pack or (HeroConfig.data.model == "hd_knight" and HdSprite.available())
-	weapon = "longsword" if hd else HeroConfig.data.weapon
+	hd = true  # both models have their own roll, block and heal animations
+	weapon = "longsword"
 	if hd:
 		shadow_size = Vector2.ZERO  # its sheets include a shadow
 	max_hp = 120
@@ -98,7 +94,7 @@ func _ready() -> void:
 	collision_layer = 2
 	collision_mask = 1 | 4
 	setup_body([], 8, 7.0, 160)
-	_roll_class = "medium" if hd else load_class(HeroConfig.data)
+	_roll_class = "light" if pack else "medium"  # the armoured knight rolls heavier
 	_lock_marker = LockMarker.new()
 	add_child(_lock_marker)
 	_lock_marker.top_level = true
@@ -346,8 +342,12 @@ func _start_attack(kind: String, input: Vector2) -> void:
 	_atk_kind = kind
 	_spend(_atk.stamina)
 	facing = _soft_lock(input)
-	var anim: String = "slash_heavy" if kind == "heavy" else ["slash", "slash2", "slash3"][clampi(_combo, 0, 2)]
-	if not (sprite is HdSprite and sprite.has_anim(anim)):
+	# Light: three different swings in a combo; heavy: two swings in turn.
+	var anim: String = ["slash", "slash2", "slash3"][clampi(_combo, 0, 2)]
+	if kind == "heavy":
+		anim = ["slash_heavy", "slash_heavy2"][_heavy_k % 2]
+		_heavy_k += 1
+	if not sprite.has_anim(anim):
 		anim = "slash_heavy" if kind == "heavy" else "slash"
 	sprite.play(anim, 0.0, false, true)
 	state = State.ATTACK
@@ -413,30 +413,9 @@ func _spawn_hitbox() -> void:
 
 # --- shield: block and parry ---------------------------------------------
 
-## Equipment load class, from the armour worn: plate = heavy, chain or
-## leather = medium, cloth or nothing = light. The HD knight is medium.
-static func load_class(cfg: Dictionary) -> String:
-	var heavy := 0
-	var medium := 0
-	for slot in ["chest", "legs", "feet", "hands", "helm"]:
-		var v: String = cfg.get(slot, "")
-		if v.begins_with("plate"):
-			heavy += 1
-		elif v.begins_with("chain") or v.begins_with("leather"):
-			medium += 1
-	if heavy >= 2:
-		return "heavy"
-	return "medium" if heavy + medium >= 2 else "light"
-
-## Footsteps of the armour worn (Flare's cloth / leather / metal steps).
+## Footsteps: leather for the fighter, metal for the armoured knight.
 func _step_kind() -> String:
-	var feet: String = HeroConfig.data.get("feet", "")
-	var chest: String = HeroConfig.data.get("chest", "")
-	if feet.begins_with("chain") or feet.begins_with("plate") or chest.begins_with("plate") or hd:
-		return "metal"
-	if feet.begins_with("leather"):
-		return "leather"
-	return "cloth"
+	return "leather" if pack else "metal"
 
 func _start_block() -> void:
 	state = State.BLOCK

@@ -14,7 +14,7 @@ var poise := 30.0
 var dead := false
 var invulnerable := false
 var knockback := Vector2.ZERO
-var sprite  # HdSprite (8 directions) or AvatarSprite (the modular hero)
+var sprite: HdSprite  # 8 directions
 var hurtbox: Area2D
 var body_height := 40.0
 var hit_sound := "hit_flesh"
@@ -53,7 +53,7 @@ func setup_body(layers: Array, hurt_layer: int, radius: float = 7.0, cell: int =
 
 ## The sprite that draws this actor; the player may use an HD one.
 func make_sprite():
-	return HdSprite.flare("skeleton")
+	return HdSprite.flare("pack/skeleton_a")
 
 func _draw() -> void:
 	if shadow_size.x <= 0.0:

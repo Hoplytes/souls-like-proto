@@ -4,7 +4,7 @@ extends Node2D
 ## 8 rows = E, SE, S, SW, W, NW, N, NE. Used for the HD hero (SmallScaleInt,
 ## 15 frames, in res://local/, licensed art never published) and, through
 ## flare(), for the Flare enemies of the isometric prototype.
-## It answers the same calls as AvatarSprite, so the actor code can drive
+## The actor code drives it the same way for every character;
 ## either; set `facing8` every frame for the 8-way direction.
 
 signal finished(anim: String)
@@ -14,7 +14,8 @@ const CELL := 128
 const FEET := Vector2(64, 99)
 # Our animation names -> the HD hero's sheet names.
 const HD_SHEETS := {
-	"idle": "Idle", "walk": "Run", "slash": "Melee", "slash_heavy": "Melee2", "thrust": "Melee",
+	"idle": "Idle", "walk": "Run", "slash": "Melee", "slash2": "Melee2", "slash3": "MeleeSpin",
+	"slash_heavy": "MeleeSpin", "slash_heavy2": "Melee2", "thrust": "Melee",
 	"jump": "Rolling", "hurt": "Die", "stagger": "TakeDamage", "block_start": "ShieldBlockStart",
 	"block": "ShieldBlockMid", "heal": "CastSpell",
 }
@@ -80,7 +81,7 @@ static func available() -> bool:
 const PACK_FOLDER := "res://local/fantasy/chars/"
 const PACK_SHEETS := {
 	"idle": "Idle", "walk": "Run", "march": "Walk", "slash": "Attack1", "slash2": "AttackRun", "slash3": "Attack2",
-	"slash_heavy": "Attack4", "thrust": "Attack1", "hurt": "Die", "stagger": "TakeDamage", "block": "CrouchIdle",
+	"slash_heavy": "Attack4", "slash_heavy2": "Special1", "thrust": "Attack1", "hurt": "Die", "stagger": "TakeDamage", "block": "CrouchIdle",
 	"block_start": "Attack5", "jump": "CrouchRun", "heal": "Taunt", "strafe_left": "StrafeLeft",
 	"strafe_right": "StrafeRight", "back": "RunBackwards",
 }
@@ -103,7 +104,7 @@ func set_res(r: float) -> void:
 	_apply_offset()
 
 func has_anim(name: String) -> bool:
-	return sheets.has(name) and frames_of.has(sheets[name])
+	return sheets.has(name) and ResourceLoader.exists(folder + sheets[name] + ".png")
 
 static func flare(name: String) -> HdSprite:
 	var s := HdSprite.new()

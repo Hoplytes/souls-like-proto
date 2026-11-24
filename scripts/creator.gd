@@ -1,22 +1,10 @@
 extends Control
 ## Character creator: the hero stands on a plinth on the left, with 8 arrows
-## around it to look at him from any side (or LB / RB); the choices
-## are on the right. Keyboard/pad: up/down to pick a line, left/right to
-## change it, Enter to start. Mouse: click the arrows.
+## around it to look at him from any side (or LB / RB); the model is chosen
+## on the right (left/right or the arrows), Enter to start.
 ## Test runs (--autotest=, --showcase=) go straight to the game.
 
-const LINES := [
-	["model", "Modèle"], ["body", "Corps"], ["head", "Tête"], ["helm", "Coiffe"], ["chest", "Torse"],
-	["hands", "Mains"], ["legs", "Jambes"], ["feet", "Pieds"], ["weapon", "Arme"], ["shield", "Bouclier"],
-	["tint", "Teinte d'armure"],
-]
-const FAMILY_TEXT := {
-	"dagger": "Très rapide, dégâts faibles, fente en attaque lourde",
-	"sword": "Équilibrée",
-	"axe": "Coups puissants, un peu plus lents",
-	"blunt": "Brise la garde et l'équilibre des ennemis",
-	"great": "À deux mains : lente, dévastatrice, sans bouclier",
-}
+const LINES := [["model", "Modèle"]]
 const ACCENT := Color(0.9, 0.78, 0.5)
 
 var _preview: Node2D
@@ -28,6 +16,7 @@ var _arrows: Array[Control] = []
 const PLINTH := Vector2(170, 250)
 var _info: Label
 var _swing_t := 0.0
+var _swing_k := 0
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -119,8 +108,6 @@ func _build_panel() -> void:
 	add_child(panel)
 	for i in LINES.size():
 		var key: String = LINES[i][0]
-		if key == "model" and HeroConfig.options("model").size() < 2:
-			continue
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 4)
 		var name := Label.new()
@@ -142,17 +129,11 @@ func _build_panel() -> void:
 	_info = Label.new()
 	_info.add_theme_font_size_override("font_size", 8)
 	_info.add_theme_color_override("font_color", Color(0.75, 0.7, 0.62))
-	_info.custom_minimum_size = Vector2(280, 32)
+	_info.custom_minimum_size = Vector2(280, 60)
 	_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	panel.add_child(_info)
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 8)
-	var rnd := Button.new()
-	rnd.text = "Au hasard"
-	rnd.add_theme_font_size_override("font_size", 10)
-	rnd.focus_mode = Control.FOCUS_NONE
-	rnd.pressed.connect(_randomize)
-	buttons.add_child(rnd)
 	var go := Button.new()
 	go.text = "Commencer  ▶"
 	go.add_theme_font_size_override("font_size", 12)
@@ -181,51 +162,28 @@ func _row_index(key: String) -> int:
 func _change(key: String, step: int) -> void:
 	var opts: Array = HeroConfig.options(key)
 	var i := opts.find(HeroConfig.data[key])
+	if opts.is_empty():
+		return
 	HeroConfig.data[key] = opts[posmod(i + step, opts.size())]
-	if key == "body":
-		HeroConfig.data.head = HeroConfig.options("head")[0]
 	_refresh()
-
-func _randomize() -> void:
-	for key in ["body", "head", "helm", "chest", "hands", "legs", "feet", "weapon", "shield", "tint"]:
-		var opts: Array = HeroConfig.options(key)
-		HeroConfig.data[key] = opts[randi() % opts.size()]
-	HeroConfig.data.head = HeroConfig.options("head")[randi() % HeroConfig.options("head").size()]
-	_refresh()
-
-const LOAD_TEXT := {
-	"light": ["légère", "rapide et longue"],
-	"medium": ["moyenne", "normale"],
-	"heavy": ["lourde", "courte, avec une longue reprise d'appui"],
-}
 
 func _refresh() -> void:
 	var model: String = HeroConfig.data.model
-	var knight := model != "flare"  # a finished character: the equipment lines do not apply
 	for i in _rows.size():
 		var key: String = _rows[i][0]
 		_rows[i][1].text = HeroConfig.label(key, HeroConfig.data[key])
-		var row: HBoxContainer = _rows[i][2]
-		var greyed := knight and key != "model"
-		row.modulate = Color(0.45, 0.45, 0.45) if greyed else (Color(1.15, 1.05, 0.85) if i == _sel else Color(0.85, 0.85, 0.85))
-	var w: String = HeroConfig.data.weapon
-	if model == "pack_hero":
-		_info.text = "Épée et bouclier rond : trois coups différents, pas chassés quand il verrouille un ennemi."
-	elif knight:
-		_info.text = "Chevalier HD : épée et bouclier, ses propres animations (roulade, blocage)."
-	else:
-		_info.text = "%s — %s\nArmure %s : roulade %s" % [Weapons.DATA[w].name, FAMILY_TEXT[Weapons.DATA[w].family],
-			LOAD_TEXT[Player.load_class(HeroConfig.data)][0], LOAD_TEXT[Player.load_class(HeroConfig.data)][1]]
+		_rows[i][2].modulate = Color(1.15, 1.05, 0.85) if i == _sel else Color(0.85, 0.85, 0.85)
+	_info.text = HeroConfig.DESCRIPTIONS.get(model, "Les graphismes (dossier local/, dépôt privé) sont absents.")
 	if _preview:
 		_preview.queue_free()
+		_preview = null
 	if model == "pack_hero":
 		_preview = HdSprite.flare("pack/hero")
-		_preview.scale = Vector2.ONE * 1.5  # its sheets are small
-	elif knight:
+		_preview.scale = Vector2.ONE * 1.4  # its figure is smaller than the knight's
+	elif model == "hd_knight":
 		_preview = HdSprite.new()
-	else:
-		_preview = AvatarSprite.new()
-		_preview.build(HeroConfig.data)
+	if _preview == null:
+		return
 	_preview_root.add_child(_preview)
 	_preview.play("idle", 2.0)
 	_preview.facing8 = Vector2.RIGHT.rotated(_dir * PI / 4.0)
@@ -233,11 +191,17 @@ func _refresh() -> void:
 func _process(delta: float) -> void:
 	if _preview == null:
 		return
+	# Shows the attacks in turn now and then.
 	_swing_t += delta
-	if _swing_t > 4.0:  # show the weapon now and then
+	if _swing_t > 3.0:
 		_swing_t = 0.0
-		_preview.play("slash", 10.0, false, true)
-		get_tree().create_timer(0.7).timeout.connect(func(): if is_instance_valid(_preview): _preview.play("idle", 2.0, true, true))
+		var swings := ["slash", "slash2", "slash3", "slash_heavy", "slash_heavy2"]
+		var a: String = swings[_swing_k % swings.size()]
+		_swing_k += 1
+		if not _preview.has_anim(a):
+			a = "slash"
+		_preview.play(a, 9.0, false, true)
+		get_tree().create_timer(1.3).timeout.connect(func(): if is_instance_valid(_preview): _preview.play("idle", 2.0, true, true))
 
 func _unhandled_input(e: InputEvent) -> void:
 	if e.is_action_pressed("ui_down"):

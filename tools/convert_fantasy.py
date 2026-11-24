@@ -33,7 +33,8 @@ FLOOR_RE = re.compile(r"^Ground (A1|A2|A18|B[1-6]|C[1-6]|D1|E1|F1|F3|H1|H4|H9|H1
 # Scenery and ground overlays kept (cliffs, raised blocks and buildings are
 # left out: the world is flat for now).
 KEEP_RE = re.compile(r"^(Ground (A([3-9]|1[0-2]|19|2[0-4])|B[1-6]|C[1-6]|E([2-9]|1[0-5])|J([2-9]|10))_[NESW]"
-                     r"|Tree .*|Stone .*|Flora .*|WallFlora .*|Misc .*_S|Wall A.*|FirePlace|Torch.*|Chest A1_S)$")
+                     r"|Tree .*|Stone .*|Flora .*|WallFlora .*|Misc .*_S|Wall A.*|FirePlace|Torch.*|Chest A1_S"
+                     r"|Wall (D|F|G)(1|7)_[NESW]|Roof (C|D)(1|6)_[NESW]|Door A1_[NESW])$")
 FLOOR_CELL = (136, 96)  # floor grid cell, the diamond's centre in the middle
 FLOOR_COLS = 14
 
@@ -78,6 +79,24 @@ def convert_tiles():
         cell = full.crop((ANCHOR[0] - cw // 2, ANCHOR[1] - ch // 2, ANCHOR[0] + cw // 2, ANCHOR[1] + ch // 2))
         grid.paste(cell, ((k % FLOOR_COLS) * cw, (k // FLOOR_COLS) * ch))
         meta["floors"][n] = k
+    # Water: the pack has foam and ripples but no water surface; a plain one
+    # (our own, drawn here) goes on the last cell of the grid.
+    k = len(floors)
+    if k >= grid.width // cw * (grid.height // ch):
+        bigger = Image.new("RGBA", (grid.width, grid.height + ch))
+        bigger.paste(grid, (0, 0))
+        grid = bigger
+    import random
+    rnd = random.Random(3)
+    water = Image.new("RGBA", (cw, ch))
+    cx, cy = cw // 2, ch // 2
+    for y in range(ch):
+        for x in range(cw):
+            if abs(x - cx) / 64.0 + abs(y - cy) / 32.0 <= 1.0:
+                n = rnd.randint(-6, 6)
+                water.putpixel((x, y), (38 + n, 104 + n, 128 + n, 255))
+    grid.paste(water, ((k % FLOOR_COLS) * cw, (k // FLOOR_COLS) * ch))
+    meta["floors"]["Water"] = k
     grid.save(os.path.join(out, "floors.png"), optimize=True)
     json.dump(meta, open(os.path.join(out, "tiles.json"), "w"), indent=0)
     print("tiles", len(pieces), "pages", len(pages), "floors", len(floors))
@@ -86,7 +105,7 @@ def convert_tiles():
 CHARS = {"Player": "hero", "Enemy 1": "skeleton_a", "Enemy 2": "skeleton_b", "Enemy 3": "skeleton_c",
          "NPC1": "brigand_a", "NPC2": "brigand_b", "NPC3": "brigand_c"}
 ANIMS = ["Idle", "Walk", "Run", "StrafeLeft", "StrafeRight", "RunBackwards", "Attack1", "Attack2", "Attack4",
-         "Attack5", "AttackRun", "TakeDamage", "Die", "CrouchIdle", "CrouchRun", "Taunt"]
+         "Attack5", "AttackRun", "Special1", "TakeDamage", "Die", "CrouchIdle", "CrouchRun", "Taunt"]
 CELL, FRAMES = 128, 15
 FEET = [64, 88]
 
@@ -101,8 +120,7 @@ def convert_chars():
             n = im.width // CELL
             crops = []
             for prow in range(8):
-                # The pack's rows turn W, SW, S, SE, E, NE, N, NW; ours E, SE, S, ...
-                row = (4 - prow) % 8
+                row = prow  # same order as the game: E, SE, S, SW, W, NW, N, NE
                 for f in range(n):
                     c = im.crop((f * CELL, prow * CELL, f * CELL + CELL, prow * CELL + CELL))
                     b = c.getbbox()
@@ -129,7 +147,9 @@ def convert_chars():
         print("char", name)
 
 # --- animated props -------------------------------------------------------------
-FX = {"Fire2": "bonfire", "Fire": "flame", "Torch 1": "torch", "PortalIdle": "portal"}
+FX = {"Props/Fire": "flame", "Props/Torch 1": "torch", "Props/PortalIdle": "portal",
+      "Animated Tiles/WindMill1": "windmill", "Animated Tiles/Water Ripples 1": "ripple_ring",
+      "Animated Tiles/Water Ripples 10": "ripple_a", "Animated Tiles/Water Ripples 11": "ripple_b"}
 
 def convert_fx():
     """Each animation: its frames side by side, cropped to their common box.
@@ -140,7 +160,7 @@ def convert_fx():
     os.makedirs(out)
     meta = {}
     for folder, name in FX.items():
-        d = os.path.join(ROOT, "Animations", "Props", folder)
+        d = os.path.join(ROOT, "Animations", folder)
         frames = [Image.open(os.path.join(d, f)).convert("RGBA") for f in sorted(os.listdir(d)) if f.endswith(".png")]
         box = None
         for im in frames:
@@ -152,7 +172,8 @@ def convert_fx():
         for k, im in enumerate(frames):
             strip.paste(im.crop(box), (k * w, 0))
         strip.save(os.path.join(out, name + ".png"), optimize=True)
-        anchor = (64, 72) if frames[0].width == 128 else ANCHOR
+        size = frames[0].width
+        anchor = (64, 72) if size == 128 else (size // 2, size * 13 // 16)  # 512 px: a 2x2-cell footprint
         meta[name] = {"frames": len(frames), "w": w, "h": h, "ax": anchor[0] - box[0], "ay": anchor[1] - box[1]}
     json.dump(meta, open(os.path.join(out, "fx.json"), "w"), indent=1)
     print("fx", list(meta))

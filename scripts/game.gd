@@ -1,9 +1,10 @@
 extends Node2D
 class_name Game
-## The open world: four biomes generated around their landmarks (prairie,
-## ruins, snow, caves), the Minotaur's dungeon reached through a portal,
-## bonfire checkpoints, enemies per biome and two bosses. Art, music and
-## sounds from Flare (CC-BY-SA 3.0).
+## The open world: four biomes generated around their landmarks, a village
+## and a lake, the Minotaur's dungeon reached through a portal, bonfire
+## checkpoints, enemies per biome and two bosses. Scenery and characters from
+## SmallScaleInt's fantasy pack (licensed, res://local/fantasy/); bosses,
+## music and sounds from Flare (CC-BY-SA 3.0).
 ## Map cell (i, j) is drawn at ((i - j) * 48, (i + j) * 24): screen up is
 ## toward cell (0, 0). The T key opens a menu to teleport to every place.
 
@@ -18,30 +19,15 @@ const HALL_AT := Vector2(140, 0)  # ...placed apart from the world
 static var spawn_place := "prairie"
 static var defeated := {}
 
-## Two looks for the same world: the fantasy pack of SmallScaleInt
-## (licensed, res://local/fantasy/, see tools/convert_fantasy.py) when it is
-## there, Flare's tiles otherwise. The biome keys stay the same (prairie to the
-## south, ruins west, "snow" east, "caves" north); names, music and scenery
-## come from the look.
-static var fantasy := false
+## The biome keys are prairie (south), ruins (west), "snow" (east, now a pine
+## forest) and "caves" (north, now the dead lands).
+static var fantasy := false  # the pack's art is there
 ## Camera distance chosen in the pause menu (kept across reloads).
 static var zoom_choice := 0
 const ZOOM_NAMES := ["éloignée", "moyenne", "proche"]
 static var BIOMES := {}
 static var PLACES := {}
 
-const FLARE_BIOMES := {
-	"prairie": {"name": "Plaine de l'Aube", "music": "overworld_theme",
-		"ambience": "environment/bird_twitter_loop", "light": Color(0.8, 0.78, 0.72), "torch": 0.35},
-	"ruins": {"name": "Ruines d'Hélos", "music": "unrest_theme",
-		"ambience": "environment/raven_loop", "light": Color(0.62, 0.6, 0.68), "torch": 0.5},
-	"snow": {"name": "Crêtes gelées", "music": "magical_theme",
-		"ambience": "environment/wind_loop", "light": Color(0.74, 0.8, 0.92), "torch": 0.35},
-	"caves": {"name": "Grottes d'ambre", "music": "cave_theme",
-		"ambience": "environment/cave_droplets_loop", "light": Color(0.46, 0.42, 0.48), "torch": 0.8},
-	"dungeon": {"name": "Labyrinthe d'Astérion", "music": "dungeon_theme",
-		"ambience": "environment/cave_wind_loop", "light": Color(0.36, 0.34, 0.44), "torch": 0.7},
-}
 const FANTASY_BIOMES := {
 	"prairie": {"name": "Plaine de l'Aube", "music": "overworld_theme",
 		"ambience": "environment/bird_twitter_loop", "light": Color(0.9, 0.88, 0.82), "torch": 0.3},
@@ -66,14 +52,22 @@ const ARENAS := {
 	"wyvern_water": {"center": Vector2(80, 14), "radius": 5.0, "label": "Boss : Glacevive, la Wyverne",
 		"entry": Vector2(73, 21)},
 }
+## The lake (east of the start, in the plain) and the village (south-west).
+const LAKE_CENTER := Vector2(86, 63)
+const LAKE_RADIUS := Vector2(6.5, 5.0)
+const VILLAGE := Rect2(59, 79, 16, 14)  # cells kept for the village
+## Houses: first cell, length along j (they are 2 cells wide), look.
+const HOUSES := [
+	[Vector2(61, 81), 3, "slate"], [Vector2(65, 80), 2, "timber"], [Vector2(61, 86), 2, "tiles"],
+	[Vector2(66, 87), 3, "slate"], [Vector2(70, 83), 2, "timber"], [Vector2(70, 88), 2, "grey"],
+]
+const HOUSE_LOOKS := {  # wall, wall with a window, roof
+	"slate": ["Wall D1", "Wall D7", "Roof D"], "tiles": ["Wall D1", "Wall D7", "Roof C"],
+	"timber": ["Wall G1", "Wall G7", "Roof C"], "grey": ["Wall F1", "Wall F7", "Roof D"],
+}
+const WINDMILL := Vector2(58.5, 91.5)
 const PORTAL_IN := Vector2(16, 18)  # in the north, to the dungeon
 const PORTAL_OUT := HALL_AT + Vector2(20.5, 15.5)  # in the dungeon, back
-
-static func _ids(from: int, to: int) -> Array:
-	var out := []
-	for k in range(from, to + 1):
-		out.append(str(k))
-	return out
 
 ## The four turns of the pack's tiles ("Tree A1" -> "Tree A1_N", ..._E, _S, _W).
 static func _turns(names: Array) -> Array:
@@ -92,33 +86,6 @@ static func _series(prefix: String, from: int, to: int, suffix := "") -> Array:
 ## Per biome: tileset, floors, floor patches (where a noise is high), ground
 ## overlays (flat, walked over), scenery [names, collision radius (0 = walk
 ## through), weight], scenery density, and the enemies [type, count].
-func _theme_flare() -> Dictionary:
-	return {
-		"tilesets": {"grass": "res://assets/flare/tiles/grass/", "ruins": "res://assets/flare/tiles/ruins/",
-			"snow": "res://assets/flare/tiles/snow/", "cave": "res://assets/flare/tiles/cave/",
-			"dungeon": "res://assets/flare/tiles/dungeon/"},
-		"zoom": 1.0,
-		"prairie": {"set": "grass", "floors": _ids(16, 31), "patches": _ids(32, 47), "overlays": [], "density": 0.09,
-			"decor": [[_ids(252, 255), 10, 6], [_ids(248, 251), 9, 4], [_ids(240, 243), 9, 3], [_ids(244, 247), 6, 1],
-				[_ids(112, 127), 0, 10], [_ids(128, 131), 7, 2], [_ids(132, 135), 12, 0.4], [_ids(136, 137), 9, 1],
-				[_ids(140, 143), 8, 0.4]],
-			"enemies": [["goblin", 7], ["goblin_elite", 2]]},
-		"ruins": {"set": "ruins", "floors": _ids(24, 31) + _ids(153, 166), "patches": _ids(105, 119), "overlays": [],
-			"density": 0.07,
-			"decor": [[_ids(223, 234), 12, 4], [_ids(241, 246), 12, 1.2], [_ids(186, 194), 0, 4], [_ids(312, 317), 0, 3],
-				[_ids(291, 294), 12, 0.5], [_ids(289, 290), 14, 0.3], [_ids(274, 277), 7, 0.4]],
-			"enemies": [["skeleton", 4], ["skeleton_weak", 3], ["zombie", 2]]},
-		"snow": {"set": "snow", "floors": _ids(16, 31), "patches": _ids(32, 47), "overlays": [], "density": 0.06,
-			"decor": [[_ids(244, 247), 7, 4], [_ids(128, 131), 7, 2], [_ids(553, 567), 0, 4], [_ids(132, 135), 12, 1],
-				[_ids(112, 127), 0, 5], [_ids(532, 534), 8, 0.25], [_ids(136, 137), 8, 1]],
-			"enemies": [["ice_ant", 7]]},
-		"caves": {"set": "cave", "floors": _ids(16, 31), "patches": _ids(48, 55), "overlays": [], "density": 0.09,
-			"decor": [[_ids(144, 149), 10, 4], [_ids(150, 153), 12, 3], [_ids(132, 135), 0, 3], [_ids(162, 163), 9, 0.3]],
-			"enemies": [["antlion", 3], ["fire_ant", 4]]},
-		"dungeon": {"set": "dungeon", "floors": ["16", "17", "18", "19", "22", "23", "26", "29", "30"] + _ids(36, 47),
-			"arena": _ids(32, 35), "bones": _ids(176, 183), "enemies": [["skeleton", 3], ["zombie", 2]]},
-	}
-
 func _theme_fantasy() -> Dictionary:
 	return {
 		"tilesets": {"fantasy": "res://local/fantasy/tiles/"},
@@ -161,6 +128,7 @@ var hud
 var music: Music
 var cam: Camera2D
 var _floor: TileMapLayer
+var _water: TileMapLayer
 var _sources := {}  # "tileset:id" -> TileSet source id
 var _anchors := {}  # tileset -> its tiles.json (atlas rects and anchors)
 var _pages := {}  # tileset -> atlas textures
@@ -184,11 +152,8 @@ var _menu_guard := 0  # physics frame until which Esc/Tab cannot reopen a menu
 ## The map (one pixel per cell, coloured by biome; scenery darker), for the map screen.
 var map_image := Image.create(W, W, false, Image.FORMAT_RGBA8)
 var hall_image := Image.create(HALL, HALL, false, Image.FORMAT_RGBA8)
-var MAP_COLORS := {
-	"prairie": Color(0.36, 0.46, 0.2), "ruins": Color(0.45, 0.43, 0.38), "snow": Color(0.84, 0.87, 0.92),
-	"caves": Color(0.36, 0.27, 0.19), "dungeon": Color(0.25, 0.23, 0.26),
-}
-const FANTASY_MAP_COLORS := {
+const MAP_COLORS := {
+	"water": Color(0.2, 0.42, 0.55), "roof": Color(0.55, 0.25, 0.18),
 	"prairie": Color(0.38, 0.5, 0.2), "ruins": Color(0.62, 0.52, 0.24), "snow": Color(0.18, 0.32, 0.2),
 	"caves": Color(0.3, 0.22, 0.16), "dungeon": Color(0.3, 0.29, 0.3),
 }
@@ -214,10 +179,11 @@ func _ready() -> void:
 	_noise.seed = 4
 	_noise.frequency = 0.02
 	fantasy = ResourceLoader.exists("res://local/fantasy/tiles/atlas_0.png")
-	theme = _theme_fantasy() if fantasy else _theme_flare()
-	BIOMES = FANTASY_BIOMES if fantasy else FLARE_BIOMES
-	if fantasy:
-		MAP_COLORS = FANTASY_MAP_COLORS.duplicate()
+	if not fantasy:
+		_missing_art()
+		return
+	theme = _theme_fantasy()
+	BIOMES = FANTASY_BIOMES
 	PLACES = {}
 	for place in PLACE_CELLS:
 		PLACES[place] = {"label": BIOMES[place].name + (" (départ)" if place == "prairie" else ""),
@@ -249,15 +215,9 @@ func _ready() -> void:
 		var b := Bonfire.new()
 		b.position = cell_of(PLACES[place].cell)
 		world.add_child(b)
-		if fantasy:
-			var wood := _tile("fantasy", "FirePlace", Vector2.ZERO, b)
-			wood.show_behind_parent = true
-			_fx("flame", Vector2(0, -4), b).scale *= 1.4
-		else:
-			var wood := _tile("grass", 102, Vector2(0, 2), b)
-			wood.show_behind_parent = true
-			var fire := _tile("dungeon", 167, Vector2(0, -2), b)  # the brazier's flames
-			fire.scale *= 0.8
+		var wood := _tile("fantasy", "FirePlace", Vector2.ZERO, b)
+		wood.show_behind_parent = true
+		_fx("flame", Vector2(0, -4), b).scale *= 1.4
 		var glow := PointLight2D.new()
 		glow.texture = _light_texture()
 		glow.color = Color(1.0, 0.65, 0.3)
@@ -343,6 +303,14 @@ func _ambience_stream(name: String) -> AudioStreamOggVorbis:
 		_ambience_cache[name] = amb
 	return _ambience_cache[name]
 
+## Without the pack's art (private assets repo not checked out in local/),
+## there is nothing to draw the world with: say so.
+func _missing_art() -> void:
+	var l := Label.new()
+	l.text = "Graphismes absents : le dossier local/ (dépôt privé souls-like-assets) n'est pas là."
+	l.position = Vector2(40, 160)
+	add_child(l)
+
 # --- tiles -----------------------------------------------------------------
 
 func _tile(tileset: String, id: Variant, at: Vector2, parent: Node, z: int = 0) -> Sprite2D:
@@ -400,6 +368,14 @@ func _build_floor_layer() -> void:
 	_floor.scale = Vector2.ONE / res
 	add_child(_floor)
 	_floor.position = cell_pos(0.5, 0.5) - _floor.map_to_local(Vector2i.ZERO) / res
+	# Water lies under the ground layer: the earth blocks around it show their
+	# sides over it, like banks.
+	_water = TileMapLayer.new()
+	_water.tile_set = ts
+	_water.z_index = -11
+	_water.scale = _floor.scale
+	_water.position = _floor.position
+	add_child(_water)
 
 func _set_floor(i: int, j: int, tileset: String, id: Variant) -> void:
 	var src: Array = _sources["%s:%s" % [tileset, str(id)]]
@@ -430,9 +406,25 @@ func _keep_clear(c: Vector2, radius: float) -> void:
 			if Vector2(di, dj).length() <= radius:
 				_blocked[Vector2i(int(c.x) + di, int(c.y) + dj)] = true
 
+func is_water(i: float, j: float) -> bool:
+	var d := Vector2(i + 0.5, j + 0.5) - LAKE_CENTER
+	var k := (d.x / LAKE_RADIUS.x) ** 2 + (d.y / LAKE_RADIUS.y) ** 2
+	return k + _noise.get_noise_2d(i * 9.0 + 300.0, j * 9.0) * 0.5 < 1.0
+
+func _near_water(i: int, j: int) -> bool:
+	for di in [-1, 0, 1]:
+		for dj in [-1, 0, 1]:
+			if is_water(i + di, j + dj):
+				return true
+	return false
+
 func _build_world() -> void:
 	for p in PLACES.values():
 		_keep_clear(p.cell, 3.5)
+	for i in range(int(VILLAGE.position.x), int(VILLAGE.end.x)):
+		for j in range(int(VILLAGE.position.y), int(VILLAGE.end.y)):
+			_blocked[Vector2i(i, j)] = true
+	_keep_clear(WINDMILL, 2.0)
 	for model in ARENAS:
 		_keep_clear(ARENAS[model].center, ARENAS[model].radius + 1.5)
 	_keep_clear(PORTAL_IN, 2.5)
@@ -441,11 +433,21 @@ func _build_world() -> void:
 			var b := biome_at(i + 0.5, j + 0.5)
 			var bt: Dictionary = theme[b]
 			var tileset: String = bt.set
+			var c := Vector2i(i, j)
+			if is_water(i, j):
+				_water.set_cell(c, _sources["fantasy:Water"][0], _sources["fantasy:Water"][1])
+				map_image.set_pixel(i, j, MAP_COLORS.water)
+				_blocked[c] = true
+				_water_cells.append(c)
+				continue
 			var patch := _noise.get_noise_2d(i * 7.0 + 900.0, j * 7.0) > 0.3
-			_set_floor(i, j, tileset, _pick(bt.patches if patch else bt.floors))
+			if _near_water(i, j):
+				_set_floor(i, j, tileset, _pick(_turns(["Ground A1"])))  # earth banks
+				_blocked[c] = true
+			else:
+				_set_floor(i, j, tileset, _pick(bt.patches if patch else bt.floors))
 			var col: Color = MAP_COLORS[b]
 			map_image.set_pixel(i, j, col.darkened(0.12) if patch else col)
-			var c := Vector2i(i, j)
 			var edge := i < 3 or j < 3 or i >= W - 3 or j >= W - 3
 			if _blocked.has(c):
 				continue
@@ -464,14 +466,91 @@ func _build_world() -> void:
 	var bottom := cell_pos(W, W)
 	for seg in [[top, left], [top, right], [left, bottom], [right, bottom]]:
 		_edge(seg[0], seg[1])
-	# A summoning circle marks the wyvern's arena and the dungeon portal.
-	if fantasy:
-		for k in 10:
-			var c: Vector2 = ARENAS.wyvern_water.center + Vector2.RIGHT.rotated(k * TAU / 10.0) * (ARENAS.wyvern_water.radius + 0.6)
-			_solid("fantasy", "Stone A14_S" if k % 2 == 0 else "Stone A15_S", cell_of(c), 9)
-	else:
-		_tile("snow", 264, cell_of(ARENAS.wyvern_water.center), _floor_decor(), 1)
-		_tile("cave", 265, cell_of(PORTAL_IN), _floor_decor(), 1)
+	_build_lake()
+	_build_village()
+	# Standing stones around the wyvern's arena.
+	for k in 10:
+		var c: Vector2 = ARENAS.wyvern_water.center + Vector2.RIGHT.rotated(k * TAU / 10.0) * (ARENAS.wyvern_water.radius + 0.6)
+		_solid("fantasy", "Stone A14_S" if k % 2 == 0 else "Stone A15_S", cell_of(c), 9)
+
+var _water_cells: Array[Vector2i] = []
+
+## The lake: water cells block the way; ripples and foam float on them.
+func _build_lake() -> void:
+	var body := StaticBody2D.new()
+	body.collision_layer = 1
+	add_child(body)
+	for c in _water_cells:
+		var poly := CollisionPolygon2D.new()
+		poly.polygon = PackedVector2Array([cell_pos(c.x, c.y), cell_pos(c.x + 1, c.y),
+			cell_pos(c.x + 1, c.y + 1), cell_pos(c.x, c.y + 1)])
+		body.add_child(poly)
+		if _rng.randf() < 0.3:
+			var fx := _fx(["ripple_a", "ripple_b", "ripple_ring"][_rng.randi() % 3], cell_of(Vector2(c) + Vector2(0.5, 0.5)), _floor_decor())
+			fx.modulate = Color(1, 1, 1, 0.55)
+
+## The village: stone and timber houses around a paved square with a well,
+## stalls, carts and hay; a windmill on its edge.
+func _build_village() -> void:
+	var square := Vector2(66, 85)
+	for i in range(-3, 4):
+		for j in range(-2, 3):
+			if Vector2(i, j).length() < 3.2:
+				_set_floor(int(square.x) + i, int(square.y) + j, "fantasy", _pick(_turns(["Ground H1", "Ground H4", "Ground H9"])))
+	for h in HOUSES:
+		_house(int(h[0].x), int(h[0].y), h[1], h[2])
+	_solid("fantasy", "Misc B42_S", cell_of(square + Vector2(0.5, 0.5)), 14)  # the well
+	for p in [["Misc B17_S", Vector2(68.5, 82.5), 14], ["Misc B18_S", Vector2(64, 84), 14], ["Misc B14_S", Vector2(69, 86.5), 12],
+			["Misc A4_S", Vector2(64.6, 82.6), 9], ["Misc B3_S", Vector2(68.4, 91.3), 9], ["Misc E3_S", Vector2(60.5, 90.5), 10],
+			["Misc E2_S", Vector2(63.5, 91.5), 9], ["Misc B6_S", Vector2(73.5, 81), 12], ["Misc B44_S", Vector2(64.2, 87.8), 4],
+			["Misc B45_S", Vector2(67.8, 82.2), 4], ["Misc A9_S", Vector2(72.5, 86.5), 8], ["Misc B11_S", Vector2(59.8, 84.5), 12]]:
+		_solid("fantasy", p[0], cell_of(p[1]), p[2])
+	var mill := StaticBody2D.new()
+	mill.position = cell_of(WINDMILL)
+	var cs := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = 26
+	cs.shape = circle
+	mill.add_child(cs)
+	world.add_child(mill)
+	_fx("windmill", Vector2.ZERO, mill).speed_scale = 0.6
+
+## A house 2 cells wide and `length` deep: walls on the edges of its cells,
+## a door and windows on the front, a pitched roof raised on the walls with a
+## hipped end. Drawn as one piece (the parts in a fixed order), sorted with
+## the characters by its centre.
+func _house(i0: int, j0: int, length: int, look: String) -> void:
+	var parts: Array = HOUSE_LOOKS[look]
+	var i1 := i0 + 1
+	var j1 := j0 + length - 1
+	var house := StaticBody2D.new()
+	house.collision_layer = 1
+	house.position = cell_pos(i0 + 1, j0 + length / 2.0)
+	world.add_child(house)
+	var poly := CollisionPolygon2D.new()
+	poly.polygon = PackedVector2Array([cell_pos(i0, j0) - house.position, cell_pos(i1 + 1, j0) - house.position,
+		cell_pos(i1 + 1, j1 + 1) - house.position, cell_pos(i0, j1 + 1) - house.position])
+	house.add_child(poly)
+	var raise := 128.0 / float(_anchors.fantasy.res)  # the walls' height
+	var at := func(i: int, j: int, up: float = 0.0) -> Vector2:
+		return cell_pos(i + 0.5, j + 0.5) - house.position + Vector2(0, -up)
+	for j in range(j0, j1 + 1):  # back walls
+		_tile("fantasy", parts[0] + "_W", at.call(i0, j), house)
+	for i in range(i0, i1 + 1):
+		_tile("fantasy", parts[0] + "_N", at.call(i, j0), house)
+	for i in range(i0, i1 + 1):  # front walls
+		_tile("fantasy", parts[1] + "_S" if i == i0 else parts[0] + "_S", at.call(i, j1), house)
+	for j in range(j0, j1 + 1):
+		_tile("fantasy", (parts[1] if j == j1 else parts[0]) + "_E", at.call(i1, j), house)
+	_tile("fantasy", "Door A1_E", at.call(i1, j0 + (length - 1) / 2), house)
+	for j in range(j0, j1 + 1):  # the roof
+		_tile("fantasy", parts[2] + "1_W", at.call(i0, j, raise), house)
+		_tile("fantasy", parts[2] + "1_E", at.call(i1, j, raise), house)
+	for i in range(i0, i1 + 1):
+		_tile("fantasy", parts[2] + "6_E", at.call(i, j1, raise), house)
+	for i in range(i0, i1 + 1):
+		for j in range(j0, j1 + 1):
+			map_image.set_pixel(i, j, MAP_COLORS.roof)
 
 var _floor_decor_node: Node2D
 
@@ -534,32 +613,14 @@ func _build_dungeon() -> void:
 	var bottom := _hall(HALL, HALL)
 	for seg in [[top, left], [top, right], [left, bottom], [right, bottom]]:
 		_edge(seg[0], seg[1])
-	var pillar := "111"
-	var statues := ["128", "129", "130", "131"]
-	var tombs := ["194", "199", "200"]
-	if fantasy:
-		pillar = "Wall A19_S"
-		statues = ["Misc C5_S", "Misc C6_S", "Misc C1_S", "Stone A14_S"]
-		tombs = ["Misc C9_S", "Misc C9_S", "Misc C9_S"]
-		# Back walls: heavy stone blocks along the two far edges.
-		for k in range(-1, HALL):
-			_tile(set, "Wall A16_S", _hall(-0.5, k + 0.5), world)
-			if k >= 0:
-				_tile(set, "Wall A16_S", _hall(k + 0.5, -0.5), world)
-	else:
-		_tile(set, 265, _hall(arena_c.x, arena_c.y), _floor_decor(), 1)
-		for k in 4:
-			var a := k * TAU / 4.0 + PI / 4.0
-			var c := arena_c + Vector2.RIGHT.rotated(a) * 2.6
-			_tile(set, 60 + k, _hall(c.x, c.y), _floor_decor(), 1)
-		# Back walls: the upper-left edge shows its right face, the upper-right
-		# edge its left face (the Flare tiles come in left/right pairs).
-		for k in range(-1, HALL):
-			if k == -1:
-				_tile(set, 66, _hall(-0.5, -0.5), world)
-				continue
-			_tile(set, [65, 69, 103, 97, 99, 65, 107, 69][posmod(k, 8)], _hall(-0.5, k + 0.5), world)
-			_tile(set, [64, 68, 102, 96, 98, 64, 106, 68][posmod(k + 3, 8)], _hall(k + 0.5, -0.5), world)
+	var pillar := "Wall A19_S"
+	var statues := ["Misc C5_S", "Misc C6_S", "Misc C1_S", "Stone A14_S"]
+	var tombs := ["Misc C9_S", "Misc C9_S", "Misc C9_S"]
+	# Back walls: heavy stone blocks along the two far edges.
+	for k in range(-1, HALL):
+		_tile(set, "Wall A16_S", _hall(-0.5, k + 0.5), world)
+		if k >= 0:
+			_tile(set, "Wall A16_S", _hall(k + 0.5, -0.5), world)
 	for k in 10:
 		var a := k * TAU / 10.0
 		var c := arena_c + Vector2.RIGHT.rotated(a) * (ARENAS.minotaur.radius + 0.9)
@@ -571,7 +632,7 @@ func _build_dungeon() -> void:
 		_solid(set, statues[k], _hall(spots[k].x, spots[k].y), 16)
 	var tomb_spots := [Vector2(15, 15), Vector2(9.5, 16.5), Vector2(17, 9)]
 	for k in 3:
-		_solid(set, tombs[k], _hall(tomb_spots[k].x, tomb_spots[k].y), 22 if not fantasy else 14)
+		_solid(set, tombs[k], _hall(tomb_spots[k].x, tomb_spots[k].y), 14)
 	for c in [Vector2(17, 20), Vector2(20, 17), Vector2(14, 9), Vector2(3, 10), Vector2(10, 3)]:
 		_brazier(_hall(c.x, c.y))
 	if not d.bones.is_empty():
@@ -582,14 +643,8 @@ func _build_dungeon() -> void:
 			_tile(set, _pick(d.bones), _hall(c.x, c.y), world).z_index = -5
 
 func _brazier(at: Vector2) -> void:
-	var b: StaticBody2D
-	if fantasy:
-		b = _solid("fantasy", "Misc C8_S", at, 10)
-		_fx("flame", Vector2(0, -22), b).z_index = 1
-	else:
-		b = _solid("dungeon", 151, at, 10)
-		var fire := _tile("dungeon", 167, Vector2(0, -14), b)
-		fire.z_index = 1
+	var b := _solid("fantasy", "Misc C8_S", at, 10)
+	_fx("flame", Vector2(0, -22), b).z_index = 1
 	var light := PointLight2D.new()
 	light.texture = _light_texture()
 	light.color = Color(1.0, 0.6, 0.3)
@@ -652,10 +707,9 @@ func _make_portal(at: Vector2, to: Vector2, label: String) -> void:
 	cs.shape = c
 	a.add_child(cs)
 	add_child(a)
-	if fantasy:
-		var ring := _tile("fantasy", "Misc C14_S", Vector2.ZERO, world)
-		ring.position = a.position + Vector2(0, -2)
-		_fx("portal", a.position + Vector2(0, -1), world)
+	var ring := _tile("fantasy", "Misc C14_S", Vector2.ZERO, world)
+	ring.position = a.position + Vector2(0, -2)
+	_fx("portal", a.position + Vector2(0, -1), world)
 	var glow := PointLight2D.new()
 	glow.texture = _light_texture()
 	glow.color = Color(0.5, 0.6, 1.0)
@@ -916,6 +970,8 @@ func teleport_places() -> Array:
 	var out := []
 	for place in PLACES:
 		out.append([PLACES[place].label, PLACES[place].cell])
+	out.append(["Village", Vector2(67, 91.5)])
+	out.append(["Lac", Vector2(82, 70)])
 	for model in ARENAS:
 		out.append([ARENAS[model].label + (" (vaincu)" if defeated.has(model) else ""), ARENAS[model].entry])
 	return out

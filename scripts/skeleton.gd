@@ -1,6 +1,6 @@
 class_name SkeletonEnemy
 extends Actor
-## Basic melee enemy (Flare skeleton or zombie): wanders, chases the player,
+## Basic melee enemy (skeletons and brigands of the fantasy pack): wanders, chases the player,
 ## telegraphs its attack, then leaves a recovery window to punish.
 ## kind "spear" thrusts from further away; "sword" swings wide.
 
@@ -8,17 +8,9 @@ enum State { IDLE, CHASE, WINDUP, ATTACK, RECOVER, STAGGER, DEAD }
 
 const WINDUP := 0.5
 const RECOVER := 0.7
-## Per enemy type: health, damage, speed, sight, and the Flare sound prefix.
+## Per enemy type (characters of the fantasy pack, res://local/fantasy/chars/):
+## health, damage, speed, sight, and the Flare sound prefix.
 const TYPES := {
-	"skeleton": {"hp": 70, "damage": 18, "speed": 52.0, "aggro": 150.0, "sound": "skeleton"},
-	"skeleton_weak": {"hp": 45, "damage": 13, "speed": 58.0, "aggro": 150.0, "sound": "skeleton"},
-	"zombie": {"hp": 90, "damage": 20, "speed": 40.0, "aggro": 130.0, "sound": "zombie"},
-	"goblin": {"hp": 50, "damage": 14, "speed": 66.0, "aggro": 170.0, "sound": "goblin"},
-	"goblin_elite": {"hp": 85, "damage": 20, "speed": 62.0, "aggro": 170.0, "sound": "goblin"},
-	"antlion": {"hp": 110, "damage": 24, "speed": 48.0, "aggro": 140.0, "sound": "antlion"},
-	"ice_ant": {"hp": 60, "damage": 16, "speed": 64.0, "aggro": 160.0, "sound": "antlion"},
-	"fire_ant": {"hp": 65, "damage": 18, "speed": 64.0, "aggro": 160.0, "sound": "antlion"},
-	# Characters of the fantasy pack (licensed, res://local/fantasy/chars/).
 	"pack/skeleton_a": {"hp": 70, "damage": 18, "speed": 52.0, "aggro": 150.0, "sound": "skeleton"},
 	"pack/skeleton_b": {"hp": 55, "damage": 22, "speed": 50.0, "aggro": 160.0, "sound": "skeleton"},
 	"pack/skeleton_c": {"hp": 100, "damage": 18, "speed": 44.0, "aggro": 140.0, "sound": "skeleton"},
@@ -34,7 +26,7 @@ var _damage := 18
 var player: Player
 var kind := "sword"
 ## A Flare enemy to draw instead of the LPC hoplite (isometric prototype).
-var flare_name := "skeleton"
+var flare_name := "pack/skeleton_a"
 var state := State.IDLE
 var home := Vector2.ZERO
 var facing := Vector2.DOWN
@@ -44,7 +36,7 @@ var _wander := Vector2.ZERO
 var _stagger_time := 0.6
 
 func _ready() -> void:
-	var t: Dictionary = TYPES.get(flare_name, TYPES.skeleton)
+	var t: Dictionary = TYPES.get(flare_name, TYPES["pack/skeleton_a"])
 	max_hp = t.hp
 	_damage = t.damage
 	SPEED = t.speed
@@ -166,7 +158,7 @@ func on_stagger() -> void:
 func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
 	var hit := super.take_hit(dmg, poise_dmg, from)
 	if hit and not dead and randf() < 0.6:
-		Sfx.flare(self, "enemies/%s_hit" % TYPES.get(flare_name, TYPES.skeleton).sound, global_position, -8.0)
+		Sfx.flare(self, "enemies/%s_hit" % TYPES.get(flare_name, TYPES["pack/skeleton_a"]).sound, global_position, -8.0)
 	return hit
 
 func on_hurt() -> void:
@@ -175,7 +167,7 @@ func on_hurt() -> void:
 
 func die() -> void:
 	state = State.DEAD
-	Sfx.flare(self, "enemies/%s_die" % TYPES.get(flare_name, TYPES.skeleton).sound, global_position, -6.0)
+	Sfx.flare(self, "enemies/%s_die" % TYPES.get(flare_name, TYPES["pack/skeleton_a"]).sound, global_position, -6.0)
 	sprite.modulate = Color.WHITE
 	super.die()
 	var t := create_tween()

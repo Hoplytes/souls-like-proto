@@ -14,6 +14,9 @@
 - Licensed (paid) art lives in the PRIVATE repo Hoplytes/souls-like-assets,
   checked out into `local/` (git-ignored here) by the web build using the
   `ASSETS_TOKEN` secret. Never commit licensed files to this public repo.
-- Art comes from Flare (CC-BY-SA 3.0, `tools/convert_flare.py`), sounds are
-  synthesised (`tools/make_sfx.py`) or CC0 / CC BY: keep the CREDITS-*.md
-  files up to date when adding assets.
+- Scenery, hero and enemies come from SmallScaleInt's paid "Fantasy tileset -
+  2D Isometric" (`tools/convert_fantasy.py` -> local/fantasy/, private repo;
+  the zip is attached to its `tileset-fantasy` release). Bosses, music and
+  sounds come from Flare (CC-BY-SA 3.0, `tools/convert_flare.py`); other
+  sounds are synthesised (`tools/make_sfx.py`) or CC0 / CC BY: keep the
+  CREDITS-*.md files up to date when adding assets.
