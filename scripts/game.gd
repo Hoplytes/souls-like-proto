@@ -74,40 +74,40 @@ static func _series(prefix: String, from: int, to: int, suffix := "") -> Array:
 		out.append("%s%d%s" % [prefix, k, suffix])
 	return out
 
-## Per region: floors, floor patches (where a noise is high), road tiles,
+## Per region: floor (one ground: two-tone patches showed the cells' shape), road tiles,
 ## ground overlays (tiles), trees (and rarer ones), bushes (solid), flora
 ## (walked through), rocks, breakables, and the enemies [type, count].
 func _theme_fantasy() -> Dictionary:
 	return {
 		"tilesets": {"fantasy": "res://local/fantasy/tiles/"},
 		"zoom": 2.0 / 3.0,  # the pack's tiles at their real size (128 px wide)
-		"prairie": {"floors": _turns(["Ground A2"]), "patches": _turns(["Ground A18"]),
-			"road": _turns(["Ground A1", "Ground A1", "Ground A1", "Ground I9"]),
+		"prairie": {"floors": _turns(["Ground A2"]),
+			"road": _turns(["Ground A1"]),
 			"overlays": _turns(_series("Ground A", 6, 12) + ["Ground A22", "Ground A23", "Ground A24"] + _series("Flora A", 1, 7)),
 			"trees": _turns(["Tree A1", "Tree A2", "Tree A3"]), "rare_trees": _turns(["Tree D1", "Tree D2", "Tree A4"]),
 			"bushes": _turns(["Tree B1", "Tree B2", "Tree B3"]), "flora": _turns(_series("Flora B", 1, 6)),
 			"rocks": _turns(["Stone A1", "Stone A2", "Stone A3"]),
 			"breakables": ["break_grass", "break_grass_small", "break_tree_green"],
 			"enemies": [["pack/brigand_a", 5], ["pack/brigand_b", 4], ["pack/brigand_c", 4]]},
-		"ruins": {"floors": _turns(["Ground J1"]), "patches": _turns(["Ground I9"]),
-			"road": _turns(["Ground A1", "Ground A1", "Ground A1", "Ground I9"]),
-			"overlays": _turns(_series("Ground J", 5, 8) + _series("Ground E", 2, 9)),
+		"ruins": {"floors": _turns(["Ground J1"]),
+			"road": _turns(["Ground A1"]),
+			"overlays": _turns(_series("Ground J", 5, 8) + _series("Ground E", 2, 7)),
 			"trees": _turns(["Tree C1"]), "rare_trees": _turns(["Tree E1", "Tree E3", "Tree A2"]),
 			"bushes": _turns(["Tree B1", "Tree B3"]), "flora": ["Misc E5_S", "Misc E6_S", "Misc E7_S", "Misc E9_S"],
 			"rocks": _turns(["Stone A13", "Stone A4", "Stone A5", "Stone A9", "Stone A11"]),
 			"breakables": ["break_tree_yellow", "break_stones", "break_jar"],
 			"enemies": [["pack/skeleton_a", 5], ["pack/skeleton_c", 4], ["pack/brigand_b", 3]]},
-		"snow": {"floors": _turns(["Ground A18"]), "patches": _turns(["Ground A2"]),
-			"road": _turns(["Ground A1", "Ground A1", "Ground A1", "Ground I9"]),
-			"overlays": _turns(["Ground A19", "Ground A20", "Ground A21", "Ground A10", "Ground A11"]),
+		"snow": {"floors": _turns(["Ground A18"]),
+			"road": _turns(["Ground C3"]),  # a dark forest path: little contrast with the dark grass
+			"overlays": _turns(["Ground A21", "Ground A10", "Ground A11", "Ground A12"]),
 			"trees": _turns(["Tree D1", "Tree D2", "Tree D3"]), "rare_trees": _turns(["Tree A4", "Tree E2", "Tree A1"]),
 			"bushes": _turns(["Tree B1", "Tree B2"]), "flora": _turns(_series("Flora B", 1, 6)),
 			"rocks": _turns(["Stone A1", "Stone A2", "Stone A10", "Stone A16"]),
 			"breakables": ["break_rocks", "break_woodpile", "break_grass"],
 			"enemies": [["pack/skeleton_a", 4], ["pack/brigand_a", 4], ["pack/skeleton_c", 3]]},
-		"caves": {"floors": _turns(["Ground C3"]), "patches": _turns(["Ground B6"]),
+		"caves": {"floors": _turns(["Ground A1"]),
 			"road": _turns(["Ground B3"]),
-			"overlays": _turns(_series("Ground E", 10, 15)),
+			"overlays": _turns(_series("Ground E", 10, 15) + _series("Ground E", 2, 7)),
 			"trees": _turns(["Tree E1", "Tree E3"]), "rare_trees": _turns(["Tree E2", "Tree E4", "Tree E5"]),
 			"bushes": _turns(["Stone A17", "Stone A18", "Stone A19"]), "flora": _turns(["Stone A21", "Stone A22", "Stone A12"]),
 			"rocks": _turns(["Stone A17", "Stone A18", "Stone A19", "Stone A10"]),
@@ -506,7 +506,6 @@ func _build_world() -> void:
 					map_image.set_pixel(i, j, MAP_COLORS.water)
 				continue
 			var road := int(map.road[WorldMap.idx(c)])
-			var patch := _noise.get_noise_2d(i * 7.0 + 900.0, j * 7.0) > 0.3
 			if road == 2:
 				_set_floor(i, j, "fantasy", _pick(_turns(["Ground H1", "Ground H4", "Ground H9"])))
 				col = MAP_COLORS.paved
@@ -517,9 +516,7 @@ func _build_world() -> void:
 				_set_floor(i, j, "fantasy", _pick(_turns(["Ground J1"])))
 				col = MAP_COLORS.field
 			else:
-				_set_floor(i, j, "fantasy", _pick(t.patches if patch else t.floors))
-				if patch:
-					col = col.darkened(0.1)
+				_set_floor(i, j, "fantasy", _pick(t.floors))
 			# Banks: an earth block (its side shows over the water) under the grass.
 			if road == 0 and _beside_water(c, walkable_water):
 				var top: Array = _sources["fantasy:" + _pick(t.floors)]
@@ -538,6 +535,8 @@ func _build_world() -> void:
 				var edge := _road_edge(c, region)
 				if edge != "":
 					_overlay_at(c, edge)
+				elif _rng.randf() < 0.12:
+					_overlay_at(c, _pick(_turns(_series("Ground E", 10, 15))))  # a few pebbles
 			if road == 0 and level_at(c) == 0 and not map.ramps.has(c):
 				if _field_cells.has(c):
 					if _rng.randf() < 0.75:
@@ -546,7 +545,6 @@ func _build_world() -> void:
 					_overlay_at(c, _pick(t.overlays))
 			if map.is_free(c) and not _field_cells.has(c):
 				_scenery(c, t)
-	_soften_dead_lands()
 	# The world's limits.
 	var top := cell_pos(0, 0)
 	var left := cell_pos(0, W)
@@ -573,7 +571,7 @@ const SIDES := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)
 const GRASS_EDGES := {  # region -> [strips by side], [halves by first side of the pair (s, s + 1)]
 	"prairie": [["Ground A4_N", "Ground A4_E", "Ground A4_S", "Ground A4_W"], ["Ground A3_N", "Ground A3_E", "Ground A3_S", "Ground A3_W"]],
 	"ruins": [["Ground J3_N", "Ground J3_E", "Ground J3_S", "Ground J3_W"], ["Ground J2_N", "Ground J2_E", "Ground J2_S", "Ground J2_W"]],
-	"snow": [["Ground A20_E", "Ground A20_S", "Ground A20_W", "Ground A20_N"], ["Ground A19_E", "Ground A19_S", "Ground A19_W", "Ground A19_N"]],
+	"snow": [["Ground A4D_N", "Ground A4D_E", "Ground A4D_S", "Ground A4D_W"], ["Ground A3D_N", "Ground A3D_E", "Ground A3D_S", "Ground A3D_W"]],
 }
 
 func _grassy(n: Vector2i) -> bool:
@@ -592,37 +590,6 @@ func _road_edge(c: Vector2i, region: String) -> String:
 		if sides[k]:
 			return set[0][k]
 	return ""
-
-## In the dead lands, dark earth meeting the light (roads, stony patches)
-## turns half light toward it, instead of a staircase of cells.
-const DARK_TO_LIGHT := ["Ground C2_N", "Ground C2_E", "Ground C2_S", "Ground C2_W"]  # light over sides (k, k + 1)
-
-func _light_ground(c: Vector2i) -> bool:
-	if not WorldMap.inside(c) or map.region_at(c) != "caves" or map.is_water(c):
-		return false
-	return map.road[WorldMap.idx(c)] > 0 or _noise.get_noise_2d(c.x * 7.0 + 900.0, c.y * 7.0) > 0.3
-
-func _soften_dead_lands() -> void:
-	for i in W:
-		for j in W:
-			var c := Vector2i(i, j)
-			if map.region_at(c) != "caves" or _light_ground(c) or map.is_water(c) or level_at(c) == 1 \
-					or _field_cells.has(c):
-				continue
-			var light := []
-			for k in 4:
-				light.append(_light_ground(c + SIDES[k]))
-			var pick := -1
-			for k in 4:
-				if light[k] and light[(k + 1) % 4]:
-					pick = k
-			if pick < 0:
-				for k in 4:
-					if light[k]:
-						pick = k
-						break
-			if pick >= 0:
-				_set_floor(i, j, "fantasy", DARK_TO_LIGHT[pick])
 
 func _beside_water(c: Vector2i, walkable_water: Dictionary) -> bool:
 	for n in [c + Vector2i(1, 0), c - Vector2i(1, 0), c + Vector2i(0, 1), c - Vector2i(0, 1)]:

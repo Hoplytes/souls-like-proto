@@ -41,6 +41,33 @@ KEEP_RE = re.compile(r"^(Ground (A([3-9]|1[0-2]|19|2[0-4])|B[1-6]|C[1-6]|E([2-9]
 FLOOR_CELL = (136, 96)  # floor grid cell, the diamond's centre in the middle
 FLOOR_COLS = 14
 
+# Whole ground blocks (not the overlays): their edges are bled outward a
+# little so that neighbouring cells overlap -- otherwise the half-transparent
+# rim of each diamond lets a thin dark seam show between cells.
+BASE_FLOOR_RE = re.compile(r"^Ground (A1|A2|A18|B[1-6]|C[1-6]|D1|E1|F1|F3|H1|H4|H9|H10|H11|I([1-9]|10)|J1)_[NESW]$")
+
+def bleed(im):
+    # Some tiles (the dark grass) have a dark rim drawn along the diamond's
+    # edges: its last pixels take the colour found a little further in.
+    src = im.copy()
+    px = im.load()
+    sp = src.load()
+    for y in range(160, 256):
+        for x in range(56, 200):
+            t = abs(x - ANCHOR[0]) / 64.0 + abs(y - ANCHOR[1]) / 32.0
+            if 0.9 <= t <= 1.05:
+                sx = round(ANCHOR[0] + (x - ANCHOR[0]) * 0.86)
+                sy = round(ANCHOR[1] + (y - ANCHOR[1]) * 0.86)
+                r, g, b, a = sp[sx, sy]
+                if a > 0:
+                    px[x, y] = (r, g, b, 255)
+    s = 1.035
+    big = im.resize((round(im.width * s), round(im.height * s)), Image.LANCZOS)
+    out = Image.new("RGBA", im.size)
+    out.paste(big, (round(ANCHOR[0] - ANCHOR[0] * s), round(ANCHOR[1] - ANCHOR[1] * s)))
+    out.alpha_composite(im)
+    return out
+
 def convert_tiles():
     names = sorted(f[:-4] for f in os.listdir(ENV) if f.endswith(".png"))
     floors = [n for n in names if FLOOR_RE.match(n)]
@@ -51,9 +78,24 @@ def convert_tiles():
     pieces = {}
     for n in keep:
         im = Image.open(os.path.join(ENV, n + ".png")).convert("RGBA")
+        if BASE_FLOOR_RE.match(n):
+            im = bleed(im)
         b = im.getbbox()
         if b:
             pieces[n] = (im.crop(b), ANCHOR[0] - b[0], ANCHOR[1] - b[1], im)
+    # Dark grass edges ("Ground A3D", "A4D"): the ragged light-grass edges
+    # tinted to the dark grass (the pack's own dark edges are straight-cut).
+    for base in ["Ground A3", "Ground A4"]:
+        for t in "NESW":
+            n = base + "_" + t
+            if n in pieces:
+                piece, ax, ay, full = pieces[n]
+                def tint(im):
+                    r, g, b, a = im.split()
+                    return Image.merge("RGBA", (r.point(lambda v: v * 0.40), g.point(lambda v: v * 0.53),
+                                                b.point(lambda v: v * 0.21), a))
+                pieces[base + "D_" + t] = (tint(piece), ax, ay, tint(full))
+                floors.append(base + "D_" + t)
     meta = {"res": RES, "tiles": {}, "floors": {}, "floor_cell": list(FLOOR_CELL), "floor_cols": FLOOR_COLS}
     W, H = 2048, 4096
     pages, page, x, y, shelf = [], [], 0, 0, 0
