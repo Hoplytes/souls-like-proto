@@ -17,6 +17,15 @@ var _players: Array[AudioStreamPlayer] = []
 var _current := -1
 var _tweens := [null, null]  # the fade running on each player
 
+static var _cache := {}
+
+## A track's stream, loaded once (preload them all to avoid a hitch when the
+## music changes with the area).
+static func stream_of(track: String) -> AudioStreamOggVorbis:
+	if not _cache.has(track):
+		_cache[track] = load(TRACKS[track] if TRACKS.has(track) else FLARE % track)
+	return _cache[track]
+
 func _ready() -> void:
 	for i in 2:
 		var p := AudioStreamPlayer.new()
@@ -28,7 +37,7 @@ func play(track: String, fade: float = 1.5, volume_db: float = VOLUME_DB) -> voi
 	if track == current_track:
 		return
 	current_track = track
-	var s: AudioStreamOggVorbis = load(TRACKS[track] if TRACKS.has(track) else FLARE % track).duplicate()
+	var s: AudioStreamOggVorbis = stream_of(track).duplicate()
 	s.loop = true
 	s.resource_name = track
 	var nxt := 0 if _current != 0 else 1

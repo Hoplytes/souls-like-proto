@@ -1,5 +1,6 @@
 extends Control
-## Character creator: the hero turns on a plinth on the left, the choices
+## Character creator: the hero stands on a plinth on the left, with 8 arrows
+## around it to look at him from any side (or LB / RB); the choices
 ## are on the right. Keyboard/pad: up/down to pick a line, left/right to
 ## change it, Enter to start. Mouse: click the arrows.
 ## Test runs (--autotest=, --showcase=) go straight to the game.
@@ -22,8 +23,9 @@ var _preview: Node2D
 var _preview_root: Node2D
 var _rows := []  # [key, value label, row container]
 var _sel := 0
-var _turn_t := 0.0
 var _dir := 2
+var _arrows: Array[Control] = []
+const PLINTH := Vector2(170, 250)
 var _info: Label
 var _swing_t := 0.0
 
@@ -59,6 +61,8 @@ func _build_preview() -> void:
 	_preview_root.scale = Vector2(2.2, 2.2)
 	_preview_root.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR  # smoother when enlarged
 	add_child(_preview_root)
+	for k in 8:  # over the hero, so the north arrow stays clickable
+		_arrows.append(_make_dir_arrow(k))
 	var title := Label.new()
 	title.text = "Création du personnage"
 	title.position = Vector2(20, 14)
@@ -66,11 +70,46 @@ func _build_preview() -> void:
 	title.add_theme_color_override("font_color", ACCENT)
 	add_child(title)
 	var hint := Label.new()
-	hint.text = "Clic ou ↑↓ ←→ · Entrée : commencer · la tenue tourne toute seule"
+	hint.text = "Clic ou ↑↓ ←→ · Entrée : commencer · flèches autour du héros (ou LB / RB) : le tourner"
 	hint.position = Vector2(20, 338)
 	hint.add_theme_font_size_override("font_size", 8)
 	hint.add_theme_color_override("font_color", Color(0.55, 0.52, 0.5))
 	add_child(hint)
+
+## A clickable arrow on the plinth's rim: turns the hero to face that way.
+func _make_dir_arrow(k: int) -> Control:
+	var a := k * PI / 4.0
+	var dir := Vector2.RIGHT.rotated(a)
+	var c := Control.new()
+	c.size = Vector2(22, 22)
+	c.position = PLINTH + Vector2(dir.x * 112.0, dir.y * 50.0) - c.size / 2.0
+	c.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	c.tooltip_text = ["Est", "Sud-est", "Sud", "Sud-ouest", "Ouest", "Nord-ouest", "Nord", "Nord-est"][k]
+	c.draw.connect(func():
+		var on := k == _dir
+		var hover := c.get_global_rect().has_point(c.get_global_mouse_position())
+		var col := ACCENT if on else (Color(0.85, 0.78, 0.65) if hover else Color(0.45, 0.4, 0.34))
+		var m := c.size / 2.0
+		var d := Vector2(dir.x, dir.y * 0.6).normalized()  # flattened like the plinth
+		var side := d.orthogonal()
+		var pts := PackedVector2Array([m + d * 8.0, m - d * 5.0 + side * 6.0, m - d * 2.0, m - d * 5.0 - side * 6.0])
+		if on:
+			c.draw_circle(m, 10.0, Color(ACCENT, 0.15))
+		c.draw_colored_polygon(pts, col))
+	c.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+			_face(k))
+	c.mouse_entered.connect(c.queue_redraw)
+	c.mouse_exited.connect(c.queue_redraw)
+	add_child(c)
+	return c
+
+func _face(k: int) -> void:
+	_dir = posmod(k, 8)
+	if _preview:
+		_preview.facing8 = Vector2.RIGHT.rotated(_dir * PI / 4.0)
+	for arrow in _arrows:
+		arrow.queue_redraw()
 
 func _build_panel() -> void:
 	var panel := VBoxContainer.new()
@@ -186,12 +225,7 @@ func _refresh() -> void:
 func _process(delta: float) -> void:
 	if _preview == null:
 		return
-	_turn_t += delta
 	_swing_t += delta
-	if _turn_t > 1.4:
-		_turn_t = 0.0
-		_dir = (_dir + 1) % 8
-		_preview.facing8 = Vector2.RIGHT.rotated(_dir * PI / 4.0)
 	if _swing_t > 4.0:  # show the weapon now and then
 		_swing_t = 0.0
 		_preview.play("slash", 10.0, false, true)
@@ -210,7 +244,26 @@ func _unhandled_input(e: InputEvent) -> void:
 		_change(_rows[_sel][0], -1)
 	elif e.is_action_pressed("ui_accept"):
 		_start()
+	elif e is InputEventJoypadButton and e.pressed and e.button_index == JOY_BUTTON_LEFT_SHOULDER:
+		_face(_dir - 1)
+	elif e is InputEventJoypadButton and e.pressed and e.button_index == JOY_BUTTON_RIGHT_SHOULDER:
+		_face(_dir + 1)
 
 func _start() -> void:
 	HeroConfig.save()
+	# The world takes a moment to build: say so before the screen freezes.
+	var cover := ColorRect.new()
+	cover.color = Color(0.03, 0.025, 0.04)
+	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(cover)
+	var l := Label.new()
+	l.text = "Chargement du monde…"
+	l.add_theme_font_size_override("font_size", 14)
+	l.add_theme_color_override("font_color", ACCENT)
+	l.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	l.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	l.grow_vertical = Control.GROW_DIRECTION_BOTH
+	cover.add_child(l)
+	await get_tree().process_frame
+	await get_tree().process_frame
 	get_tree().change_scene_to_file("res://scenes/game.tscn")

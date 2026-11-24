@@ -31,6 +31,25 @@ var feet_point := FEET  # in the sheet's pixels
 ## Detail factor: the sheets are drawn at 1/res (Flare art is stored at twice
 ## its size in the world, for a sharp 1280x720 picture).
 var res := 1.0
+## Packed sheets (Flare art): sheet name -> rects[row][frame] = [x, y, w, h, ox, oy],
+## each frame cropped to what it shows, (ox, oy) its corner inside the cell.
+var rects := {}
+
+## Every sheet loaded so far, shared by all sprites, so that the first
+## attack or the first boss does not stall the game while it decodes.
+static var _cache := {}
+
+static func texture(path: String) -> Texture2D:
+	if not _cache.has(path):
+		_cache[path] = load(path)
+	return _cache[path]
+
+## Loads every sheet of a Flare character in advance (see Game._preload).
+static func preload_flare(name: String) -> void:
+	var folder := "res://assets/flare/%s/" % name
+	var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(folder + "anims.json"))
+	for a in meta.anims:
+		texture(folder + a + ".png")
 
 var anim := "idle"
 var fps := 12.0
@@ -64,6 +83,8 @@ static func flare(name: String) -> HdSprite:
 		"hurt": "die", "stagger": "hit", "block": "block", "block_start": "block", "jump": "run", "heal": "stance"}
 	for a in meta.anims:
 		s.frames_of[a] = int(meta.anims[a].frames)
+		if meta.anims[a].has("rects"):
+			s.rects[a] = meta.anims[a].rects
 	s._textures.clear()  # _init cached the HD hero's idle sheet
 	s._apply_offset()
 	s._show()
@@ -78,6 +99,9 @@ func _init() -> void:
 	_show()
 
 func _apply_offset() -> void:
+	if not rects.is_empty():
+		_show()  # the offset depends on the frame's crop
+		return
 	_sprite.offset = -feet_point + Vector2(0, pivot * res)
 
 func _count() -> int:
@@ -94,7 +118,7 @@ func feet() -> Vector2:
 
 func _texture(name: String) -> Texture2D:
 	if not _textures.has(name):
-		_textures[name] = load(folder + sheets[name] + ".png")
+		_textures[name] = texture(folder + sheets[name] + ".png")
 	return _textures[name]
 
 func play(name: String, speed: float = 8.0, looping: bool = true, restart: bool = false) -> void:
@@ -152,6 +176,16 @@ func _show() -> void:
 	if not sheets.has(anim) or not ResourceLoader.exists(folder + sheets[anim] + ".png"):
 		return
 	_sprite.texture = _texture(anim)
-	_sprite.hframes = _count()
 	var row := posmod(roundi(facing8.angle() / (PI / 4.0)), 8)
-	_sprite.frame = row * _count() + mini(_frame, _count() - 1)
+	var f := mini(_frame, _count() - 1)
+	var sheet: String = sheets[anim]
+	if rects.has(sheet):
+		var r: Array = rects[sheet][row][f]
+		_sprite.region_enabled = true
+		_sprite.hframes = 1
+		_sprite.vframes = 1
+		_sprite.region_rect = Rect2(r[0], r[1], r[2], r[3])
+		_sprite.offset = -feet_point + Vector2(r[4], r[5] + pivot * res)
+		return
+	_sprite.hframes = _count()
+	_sprite.frame = row * _count() + f

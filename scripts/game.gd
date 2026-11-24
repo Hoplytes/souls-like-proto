@@ -135,6 +135,7 @@ func _ready() -> void:
 	arena_center = cell_of(ARENAS.minotaur.center)
 	arena_radius = ARENAS.minotaur.radius * TW / sqrt(2.0)
 
+	_preload()
 	_build_floor_layer()
 	world = Node2D.new()
 	world.y_sort_enabled = true
@@ -202,6 +203,32 @@ func _ready() -> void:
 			t.main = self
 			t.out = a.trim_prefix("--autotest=")
 			add_child(t)
+
+## Everything that would otherwise load in the middle of the game (enemy
+## and boss animations, music, ambiences) is loaded now, at the start.
+static var _ambience_cache := {}
+
+func _preload() -> void:
+	var models := {"skeleton": true, "zombie": true}
+	for b in ENEMIES:
+		for e in ENEMIES[b]:
+			models[e[0]] = true
+	for m in ARENAS:
+		models[m] = true
+	for m in models:
+		HdSprite.preload_flare(m)
+	for b in BIOMES:
+		Music.stream_of(BIOMES[b].music)
+		_ambience_stream(BIOMES[b].ambience)
+	for t in Music.TRACKS:
+		Music.stream_of(t)
+
+func _ambience_stream(name: String) -> AudioStreamOggVorbis:
+	if not _ambience_cache.has(name):
+		var amb: AudioStreamOggVorbis = load("res://assets/flare_audio/soundfx/%s.ogg" % name).duplicate()
+		amb.loop = true
+		_ambience_cache[name] = amb
+	return _ambience_cache[name]
 
 # --- tiles -----------------------------------------------------------------
 
@@ -607,10 +634,10 @@ func _update_biome(force: bool) -> void:
 	var info: Dictionary = BIOMES[b]
 	if _sealed.is_empty():
 		music.play(info.music, 2.0, -12.0)
-	var amb: AudioStreamOggVorbis = load("res://assets/flare_audio/soundfx/%s.ogg" % info.ambience).duplicate()
-	amb.loop = true
-	_ambience.stream = amb
-	_ambience.play()
+	var amb := _ambience_stream(info.ambience)
+	if _ambience.stream != amb:
+		_ambience.stream = amb
+		_ambience.play()
 	var t := create_tween().set_parallel(true)
 	t.tween_property(_modulate, "color", info.light, 1.5 if not force else 0.01)
 	t.tween_property(_torch, "energy", info.torch, 1.5 if not force else 0.01)

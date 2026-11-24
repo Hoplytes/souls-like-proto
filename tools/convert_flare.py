@@ -51,12 +51,12 @@ def convert(txt, out_dir, wanted, scale, cell, feet):
     scale, cell, feet = scale * RES, cell * RES, [f * RES for f in feet]
     anims = parse(txt)
     os.makedirs(out_dir, exist_ok=True)
-    meta = {"cell": cell, "feet": feet, "res": RES, "anims": {}}
+    meta = {"cell": cell, "feet": feet, "res": RES, "packed": True, "anims": {}}
     for anim in wanted:
         a = anims[anim]
         cache = {}
         n = a["count"]
-        sheet = Image.new("RGBA", (n * cell, 8 * cell))
+        cells = [[Image.new("RGBA", (cell, cell)) for _ in range(n)] for _ in range(8)]
         for idx, flare_dir, x, y, w, h, ox, oy, src in a["frames"]:
             if src not in cache:
                 cache[src] = Image.open(os.path.join(SRC, src)).convert("RGBA")
@@ -66,11 +66,34 @@ def convert(txt, out_dir, wanted, scale, cell, feet):
             piece = cache[src].crop((x, y, x + w, y + h))
             sw, sh = max(1, round(w * scale)), max(1, round(h * scale))
             piece = piece.resize((sw, sh), Image.LANCZOS)
-            px = idx * cell + feet[0] - round(ox * scale)
-            py = row * cell + feet[1] - round(oy * scale)
-            sheet.alpha_composite(piece, (px, py)) if px >= 0 and py >= 0 else sheet.paste(piece, (px, py), piece)
+            px, py = feet[0] - round(ox * scale), feet[1] - round(oy * scale)
+            cells[row][idx].alpha_composite(piece, (px, py)) if px >= 0 and py >= 0 else cells[row][idx].paste(piece, (px, py), piece)
+        # Pack: each frame cropped to what it shows (most of a cell is empty),
+        # shelf-packed into one sheet. rects[row][frame] = [x, y, w, h, ox, oy]
+        # with (ox, oy) the crop's corner inside the cell.
+        crops = []
+        for row in range(8):
+            for f in range(n):
+                b = cells[row][f].getbbox()
+                crops.append((row, f, cells[row][f].crop(b) if b else None, b))
+        width = min(2048, max(512, cell * 4))
+        rects = [[[0, 0, 0, 0, 0, 0] for _ in range(n)] for _ in range(8)]
+        x = y = shelf = 0
+        placed = []
+        for row, f, im, b in sorted(crops, key=lambda c: -(c[2].height if c[2] else 0)):
+            if im is None:
+                continue
+            if x + im.width > width:
+                x, y, shelf = 0, y + shelf + 2, 0
+            placed.append((im, x, y))
+            rects[row][f] = [x, y, im.width, im.height, b[0], b[1]]
+            x += im.width + 2  # transparent gutters: no bleeding when filtered
+            shelf = max(shelf, im.height)
+        sheet = Image.new("RGBA", (width, max(1, y + shelf)))
+        for im, px, py in placed:
+            sheet.paste(im, (px, py))
         sheet.save(os.path.join(out_dir, anim + ".png"), optimize=True)
-        meta["anims"][anim] = {"frames": n, "ms": a.get("ms", 500), "type": a.get("type", "looped")}
+        meta["anims"][anim] = {"frames": n, "ms": a.get("ms", 500), "type": a.get("type", "looped"), "rects": rects}
     json.dump(meta, open(os.path.join(out_dir, "anims.json"), "w"), indent=1)
     return meta
 
