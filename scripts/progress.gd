@@ -17,7 +17,7 @@ static func fresh() -> Dictionary:
 		"v": 1, "souls": 0, "level": 1, "vigor": 1, "endurance": 1, "strength": 1,
 		"flasks": 3, "lit": ["prairie"], "spawn": "prairie", "defeated": {}, "taken": {},
 		"stain": {},  # {"x", "y": world position, "souls"}
-		"deaths": 0, "kills": 0,
+		"deaths": 0, "kills": 0, "intro": false,
 	}
 
 static func new_game() -> void:

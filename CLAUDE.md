@@ -10,7 +10,10 @@
 - Godot 4.5, GDScript. Smoke test with screenshots:
   `xvfb-run -a godot --rendering-driver opengl3 -- --autotest=<folder>`
   (the game starts in the character creator; test runs skip it)
-  (see `tools/autotest.gd`).
+  (see `tools/autotest.gd`). `--test=res://tools/<script>.gd` runs another
+  scenario instead (a script extending autotest.gd, e.g. for one check).
+- Progress (souls, level, bonfires, bosses, items, bloodstain) is saved in
+  `user://save.json` by `scripts/progress.gd`; test runs never touch it.
 - Licensed (paid) art lives in the PRIVATE repo Hoplytes/souls-like-assets,
   checked out into `local/` (git-ignored here) by the web build using the
   `ASSETS_TOKEN` secret. Never commit licensed files to this public repo.

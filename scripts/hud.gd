@@ -20,6 +20,15 @@ var _gain_t := 9.0
 var _death_t := -1.0
 var _death_text := ""
 var _t := 0.0
+## The opening words of a new game (any key skips them).
+const INTRO := [
+	"Jadis, les feux de camp reliaient les terres d'Hélos.",
+	"Puis les flammes ont faibli, et les morts ne sont plus restés morts.",
+	"Toi qui t'es relevé des cendres : rallume les feux,",
+	"et fais tomber ceux qui gardent les ténèbres.",
+]
+var _intro_t := -1.0
+signal intro_done
 
 const HELP := [
 	"ZQSD / WASD / flèches : se déplacer",
@@ -72,7 +81,25 @@ func death_screen(text: String = "VOUS ÊTES MORT") -> void:
 	message = ""
 	hint = ""
 
+func play_intro() -> void:
+	_intro_t = 0.0
+
+func _end_intro() -> void:
+	if _intro_t >= 0.0:
+		_intro_t = -1.0
+		intro_done.emit()
+
+func _input(e: InputEvent) -> void:
+	if _intro_t > 0.6 and e.is_pressed() and not e.is_echo() \
+			and (e is InputEventKey or e is InputEventJoypadButton or e is InputEventMouseButton):
+		get_viewport().set_input_as_handled()
+		_end_intro()
+
 func _process(delta: float) -> void:
+	if _intro_t >= 0.0:
+		_intro_t += delta
+		if _intro_t > INTRO.size() * 2.6 + 3.0:
+			_end_intro()
 	_msg_t += delta
 	_t += delta
 	_gain_t += delta
@@ -157,6 +184,19 @@ func _draw() -> void:
 		_draw_death(vw, vh)
 	if fade > 0.0:
 		draw_rect(Rect2(0, 0, vw, vh), Color(0, 0, 0, fade))
+	if _intro_t >= 0.0:
+		_draw_intro(vw, vh)
+
+func _draw_intro(vw: float, vh: float) -> void:
+	var end := INTRO.size() * 2.6 + 3.0
+	draw_rect(Rect2(0, 0, vw, vh), Color(0.01, 0.008, 0.015, clampf((end - _intro_t) / 1.0, 0.0, 1.0)))
+	var f := get_theme_default_font()
+	for k in INTRO.size():
+		var a := clampf((_intro_t - 0.8 - k * 2.6) / 1.2, 0.0, 1.0) * clampf((end - 0.4 - _intro_t) / 1.0, 0.0, 1.0)
+		var y := vh * 0.36 + k * 20.0
+		draw_string(f, Vector2(0, y), INTRO[k], HORIZONTAL_ALIGNMENT_CENTER, vw, 11, Color(0.85, 0.78, 0.62, a))
+	var skip := clampf((_intro_t - 1.5) / 1.0, 0.0, 0.6)
+	draw_string(f, Vector2(0, vh - 14), "une touche pour passer", HORIZONTAL_ALIGNMENT_CENTER, vw, 7, Color(0.6, 0.58, 0.55, skip))
 
 func _draw_death(vw: float, vh: float) -> void:
 	var a := clampf((_death_t - 0.4) / 1.6, 0.0, 1.0)

@@ -145,6 +145,11 @@ static func soul(parent: Node, from: Vector2, to: Node2D) -> void:
 	f.origin = from
 	f.angle = randf_range(-1.0, 1.0)
 
+## Whether a point is around the screen (animated drawings far away skip
+## their redraw).
+static func near_camera(p: Vector2, margin: float = 700.0) -> bool:
+	return not is_instance_valid(camera) or p.distance_squared_to(camera.get_screen_center_position()) < margin * margin
+
 static func shake(amount: float) -> void:
 	_shake = maxf(_shake, amount)
 

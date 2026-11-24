@@ -258,6 +258,13 @@ func _ready() -> void:
 	_build_hud()
 	_update_area()
 	_update_biome(true)
+	if not testing and not Progress.data.get("intro", false):
+		get_tree().paused = true
+		hud.play_intro()
+		hud.intro_done.connect(func():
+			Progress.data.intro = true
+			Progress.save()
+			get_tree().paused = false, CONNECT_ONE_SHOT)
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--showcase="):
 			var sc: Node = load("res://tools/showcase.gd").new()
@@ -1330,6 +1337,9 @@ func _on_boss_died(model: String) -> void:
 		_sealed.erase(model)
 		if not _ended:
 			hud.message = ""
+			if Progress.data.defeated.size() >= ARENAS.size():
+				hud.announce("Les gardiens sont tombés", Color(1.0, 0.8, 0.45),
+					"Les feux d'Hélos brûlent à nouveau. Merci d'avoir joué !", 5.0)
 		_biome = ""
 		_update_biome(true))
 
@@ -1446,6 +1456,10 @@ func _rest(place: String) -> void:
 	Progress.save()
 	Sfx.play(self, "bonfire", null, -2.0, 0.0)
 	Fx.ring(world, _bonfires[place].global_position, 4, 60, Color(1, 0.7, 0.3), 0.6)
+	if hud.fade < 0.01:  # a short dimming while the world wakes up again
+		var t := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		t.tween_property(hud, "fade", 0.55, 0.25)
+		t.tween_property(hud, "fade", 0.0, 0.6)
 	_open_bonfire_menu(place)
 
 func _open_bonfire_menu(place: String, focus: int = 0) -> void:

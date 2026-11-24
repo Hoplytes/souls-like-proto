@@ -13,7 +13,7 @@ var _t := randf() * 10.0
 
 func _process(delta: float) -> void:
 	_t += delta
-	if is_visible_in_tree():
+	if is_visible_in_tree() and Fx.near_camera(global_position):
 		queue_redraw()
 
 func _draw() -> void:
