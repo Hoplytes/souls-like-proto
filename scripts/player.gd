@@ -304,7 +304,7 @@ func _roll(delta: float) -> void:
 func _reset_sprite() -> void:
 	sprite.scale = Vector2.ONE
 	sprite.rotation = 0.0
-	sprite.position = Vector2(0, -sprite.pivot)
+	sprite.position = Vector2(0, -sprite.pivot - sprite.lift)
 
 func _spawn_ghost() -> void:
 	var g: Node2D = sprite.duplicate()

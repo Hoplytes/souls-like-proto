@@ -14,11 +14,15 @@ et plus).
 - Un **monde ouvert** de 96 × 96 cases dessiné avec le pack *Fantasy tileset - 2D Isometric* de SmallScaleInt, en
   quatre biomes, chacun avec sa musique, son ambiance sonore, sa lumière, ses ennemis et son **feu de camp** (se
   reposer remet la santé et les fioles, fait revenir les ennemis et devient le point de réapparition) :
-  - **Plaine de l'Aube** (sud, départ) : chênes, haies, brigands ; un **village** (maisons de pierre et de bois,
-    place pavée, puits, étals, moulin) et un **lac** aux berges de terre ;
+  - **Plaine de l'Aube** (sud, départ) : chênes, haies, brigands ; un **village** (maisons de pierre et de bois
+    où l'on peut entrer : le toit s'efface, place pavée, puits, étals, moulin) et un **lac** ;
   - **Ruines d'Hélos** (ouest) : herbe d'automne, dallages, statues, colonnes, squelettes et brigands ;
   - **Forêt des Cimes** (est) : pins, rochers, et l'arène de la wyverne **Glacevive** entourée de menhirs ;
   - **Terres mortes** (nord) : arbres morts, cristaux, squelettes, et le portail du donjon.
+- **Relief** : des plateaux dans chaque biome, bordés de falaises, où l'on monte par des rampes taillées dans la
+  roche ; les personnages et le décor d'un plateau sont dessinés un niveau plus haut.
+- **Décor destructible** : tonneaux, jarres, caisses, foin, hautes herbes, petits arbres et tas de pierres se cassent
+  d'un coup d'arme (animations d'explosion du pack).
 - Le **Labyrinthe d'Astérion**, un donjon de pierre éclairé par des braseros, atteint par le portail.
 - **Téléportation de test** : la touche **T** ouvre un menu vers les feux de camp, le village, le lac et les boss.
 - **Combat** façon Souls : le déplacement répond tout de suite, mais chaque action engage. Une attaque ne s'oriente
@@ -58,12 +62,13 @@ et plus).
 | `scripts/creator.gd` | Écran de choix du héros |
 | `scripts/hero_config.gd` | Le modèle choisi (sauvegardé dans `user://hero.json`) |
 | `scripts/hd_sprite.gd` | Joue une planche en 8 directions (héros, ennemis, boss) |
-| `scripts/game.gd` | Le monde ouvert (biomes, décors, village, lac, donjon, portails, téléportation) et le déroulement de la partie |
+| `scripts/game.gd` | Le monde ouvert (biomes, décors, relief, village, lac, donjon, portails, téléportation) et le déroulement de la partie |
 | `scripts/game_menu.gd` | Menus du jeu en pause (pause, téléportation) |
 | `scripts/map_view.gd` | L'écran de carte |
 | `scripts/player.gd` | Le joueur : états, roulade, endurance, combos, bouclier, soin |
 | `scripts/weapons.gd` | **Les armes et leurs styles de combat, sous forme de données** |
 | `scripts/actor.gd` | Base commune : santé, poise (résistance), coups reçus, parade, riposte, mort |
+| `scripts/breakable.gd` | Décor destructible |
 | `scripts/skeleton.gd` | Ennemis ordinaires (squelettes, brigands), un tableau de caractéristiques par type |
 | `scripts/boss.gd` | Les boss (Minotaure, wyverne) et leurs attaques |
 | `scripts/fx.gd`, `sfx.gd`, `music.gd` | Effets visuels, bruitages, musique |

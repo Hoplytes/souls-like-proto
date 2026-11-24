@@ -30,11 +30,11 @@ ANCHOR = (128, 208)  # the tile diamond's centre in every 256x256 tile
 # --- tiles ------------------------------------------------------------------
 # Floors: full ground blocks (drawn by the game's TileMapLayer, all 4 turns).
 FLOOR_RE = re.compile(r"^Ground (A1|A2|A18|B[1-6]|C[1-6]|D1|E1|F1|F3|H1|H4|H9|H10|H11|I([1-9]|10)|J1)_[NESW]$")
-# Scenery and ground overlays kept (cliffs, raised blocks and buildings are
-# left out: the world is flat for now).
+# Scenery, ground overlays, house parts, cliffs and ramps kept.
 KEEP_RE = re.compile(r"^(Ground (A([3-9]|1[0-2]|19|2[0-4])|B[1-6]|C[1-6]|E([2-9]|1[0-5])|J([2-9]|10))_[NESW]"
                      r"|Tree .*|Stone .*|Flora .*|WallFlora .*|Misc .*_S|Wall A.*|FirePlace|Torch.*|Chest A1_S"
-                     r"|Wall (D|F|G)(1|7)_[NESW]|Roof (C|D)(1|6)_[NESW]|Door A1_[NESW])$")
+                     r"|Wall (D|F|G)(1|7)_[NESW]|Roof (C|D)(1|6)_[NESW]|Door A1_[NESW]"
+                     r"|Ground G(12|13|16|22)_[NESW])$")
 FLOOR_CELL = (136, 96)  # floor grid cell, the diamond's centre in the middle
 FLOOR_COLS = 14
 
@@ -92,7 +92,7 @@ def convert_tiles():
     cx, cy = cw // 2, ch // 2
     for y in range(ch):
         for x in range(cw):
-            if abs(x - cx) / 64.0 + abs(y - cy) / 32.0 <= 1.0:
+            if abs(x - cx) / 64.0 + abs(y - cy) / 32.0 <= 1.08:  # a little over the cell: no seams
                 n = rnd.randint(-6, 6)
                 water.putpixel((x, y), (38 + n, 104 + n, 128 + n, 255))
     grid.paste(water, ((k % FLOOR_COLS) * cw, (k // FLOOR_COLS) * ch))
@@ -149,7 +149,14 @@ def convert_chars():
 # --- animated props -------------------------------------------------------------
 FX = {"Props/Fire": "flame", "Props/Torch 1": "torch", "Props/PortalIdle": "portal",
       "Animated Tiles/WindMill1": "windmill", "Animated Tiles/Water Ripples 1": "ripple_ring",
-      "Animated Tiles/Water Ripples 10": "ripple_a", "Animated Tiles/Water Ripples 11": "ripple_b"}
+      "Animated Tiles/Water Ripples 10": "ripple_a", "Animated Tiles/Water Ripples 11": "ripple_b",
+      # Breakable scenery: frame 0 is the object, the last frame its debris.
+      "Props/Barrel 1": "break_barrel_a", "Props/Barrel 2": "break_barrel_b", "Props/Barrel 3": "break_barrel_c",
+      "Destructible tiles/Clay explosion": "break_jar", "Destructible tiles/straw explosion": "break_straw",
+      "Destructible tiles/grass explosion large": "break_grass", "Destructible tiles/Grass explosion small": "break_grass_small",
+      "Destructible tiles/Tree Green Explosion": "break_tree_green", "Destructible tiles/Tree Yellow Explosion": "break_tree_yellow",
+      "Destructible tiles/stone explosion Small": "break_stones", "Destructible tiles/stone explosion large": "break_rocks",
+      "Destructible tiles/wood explosion Small": "break_crate", "Destructible tiles/wood explosion large": "break_woodpile"}
 
 def convert_fx():
     """Each animation: its frames side by side, cropped to their common box.
@@ -168,13 +175,15 @@ def convert_fx():
             if b:
                 box = b if box is None else (min(box[0], b[0]), min(box[1], b[1]), max(box[2], b[2]), max(box[3], b[3]))
         w, h = box[2] - box[0], box[3] - box[1]
-        strip = Image.new("RGBA", (w * len(frames), h))
+        cols = min(len(frames), 4096 // w)  # at most 4096 px wide (WebGL)
+        rows = (len(frames) + cols - 1) // cols
+        strip = Image.new("RGBA", (w * cols, h * rows))
         for k, im in enumerate(frames):
-            strip.paste(im.crop(box), (k * w, 0))
+            strip.paste(im.crop(box), ((k % cols) * w, (k // cols) * h))
         strip.save(os.path.join(out, name + ".png"), optimize=True)
         size = frames[0].width
         anchor = (64, 72) if size == 128 else (size // 2, size * 13 // 16)  # 512 px: a 2x2-cell footprint
-        meta[name] = {"frames": len(frames), "w": w, "h": h, "ax": anchor[0] - box[0], "ay": anchor[1] - box[1]}
+        meta[name] = {"frames": len(frames), "cols": cols, "w": w, "h": h, "ax": anchor[0] - box[0], "ay": anchor[1] - box[1]}
     json.dump(meta, open(os.path.join(out, "fx.json"), "w"), indent=1)
     print("fx", list(meta))
 

@@ -14,7 +14,8 @@ func _process(delta: float) -> void:
 	visible = is_instance_valid(target)
 	if visible:
 		var h: float = target.get("body_height") if target.get("body_height") != null else 40.0
-		global_position = target.global_position + Vector2(0, -h * 0.55)
+		var lift: float = target.sprite.lift if target.get("sprite") is HdSprite else 0.0
+		global_position = target.global_position + Vector2(0, -h * 0.55 - lift)
 	queue_redraw()
 
 func _draw() -> void:

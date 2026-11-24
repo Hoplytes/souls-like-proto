@@ -23,7 +23,7 @@ static var defeated := {}
 ## forest) and "caves" (north, now the dead lands).
 static var fantasy := false  # the pack's art is there
 ## Camera distance chosen in the pause menu (kept across reloads).
-static var zoom_choice := 0
+static var zoom_choice := 1
 const ZOOM_NAMES := ["éloignée", "moyenne", "proche"]
 static var BIOMES := {}
 static var PLACES := {}
@@ -96,7 +96,8 @@ func _theme_fantasy() -> Dictionary:
 			"decor": [[_turns(["Tree A1", "Tree A2", "Tree A3"]), 9, 6], [_turns(["Tree B1", "Tree B2", "Tree B3"]), 7, 2],
 				[_turns(["Tree D1", "Tree D2"]), 8, 1], [_turns(["Stone A1", "Stone A2", "Stone A3"]), 8, 1.2],
 				[_turns(_series("Flora B", 1, 6)), 0, 3], [["Misc A3_S", "Misc A4_S", "Misc B3_S", "Misc E2_S",
-				"Misc E3_S", "Misc E4_S", "Misc B6_S"], 10, 0.5]],
+				"Misc E3_S", "Misc E4_S", "Misc B6_S"], 10, 0.5],
+				[["break_grass", "break_grass_small", "break_tree_green"], 7, 1.5]],
 			"enemies": [["pack/brigand_a", 4], ["pack/brigand_b", 3], ["pack/brigand_c", 3]]},
 		"ruins": {"set": "fantasy", "floors": _turns(["Ground J1"]), "patches": _turns(["Ground H1", "Ground H4", "Ground H9"]),
 			"overlays": _turns(_series("Ground J", 5, 8) + _series("Ground E", 2, 9)), "density": 0.07,
@@ -104,18 +105,21 @@ func _theme_fantasy() -> Dictionary:
 				[_turns(["Stone A13", "Stone A14", "Stone A15", "Stone A4", "Stone A5"]), 8, 1.5],
 				[_turns(["Wall A6", "Wall A19", "Wall A20"]), 9, 1.5], [_turns(["Wall A8", "Wall A9", "Wall A17"]), 9, 1],
 				[["Misc C1_S", "Misc C5_S", "Misc C6_S", "Misc C7_S"], 9, 0.6],
-				[["Misc E5_S", "Misc E6_S", "Misc E7_S", "Misc E9_S"], 0, 1.5]],
+				[["Misc E5_S", "Misc E6_S", "Misc E7_S", "Misc E9_S"], 0, 1.5],
+				[["break_tree_yellow", "break_stones", "break_jar"], 7, 1.2]],
 			"enemies": [["pack/skeleton_a", 4], ["pack/skeleton_c", 3], ["pack/brigand_b", 2]]},
 		"snow": {"set": "fantasy", "floors": _turns(["Ground A18"]), "patches": _turns(["Ground A2"]),
 			"overlays": _turns(["Ground A20", "Ground A21", "Ground A10", "Ground A11"]), "density": 0.1,
 			"decor": [[_turns(["Tree D1", "Tree D2", "Tree D3"]), 9, 8], [_turns(["Stone A1", "Stone A2", "Stone A10"]), 9, 2],
-				[_turns(["Tree A4"]), 5, 0.6], [_turns(["Stone A16"]), 7, 0.25], [_turns(_series("Flora B", 1, 6)), 0, 2]],
+				[_turns(["Tree A4"]), 5, 0.6], [_turns(["Stone A16"]), 7, 0.25], [_turns(_series("Flora B", 1, 6)), 0, 2],
+				[["break_rocks", "break_grass", "break_woodpile"], 8, 1.0]],
 			"enemies": [["pack/skeleton_a", 3], ["pack/brigand_a", 3], ["pack/skeleton_c", 2]]},
 		"caves": {"set": "fantasy", "floors": _turns(["Ground C3", "Ground I9"]), "patches": _turns(["Ground B1", "Ground B4"]),
 			"overlays": _turns(_series("Ground E", 10, 15)), "density": 0.08,
 			"decor": [[_turns(["Tree E1", "Tree E3"]), 7, 5], [_turns(["Tree E2", "Tree E4", "Tree E5"]), 8, 2],
 				[_turns(["Stone A17", "Stone A18", "Stone A19"]), 9, 2], [_turns(["Stone A21", "Stone A22"]), 7, 0.6],
-				[_turns(["Stone A8"]), 12, 0.15], [["Misc C12_S", "Misc C13_S"], 8, 0.3]],
+				[_turns(["Stone A8"]), 12, 0.15], [["Misc C12_S", "Misc C13_S"], 8, 0.3],
+				[["break_stones", "break_rocks", "break_crate"], 8, 1.0]],
 			"enemies": [["pack/skeleton_b", 4], ["pack/skeleton_a", 3]]},
 		"dungeon": {"set": "fantasy", "floors": _turns(["Ground D1"]), "arena": _turns(["Ground H10", "Ground H11"]),
 			"bones": [], "enemies": [["pack/skeleton_c", 3], ["pack/skeleton_b", 2]]},
@@ -129,6 +133,7 @@ var music: Music
 var cam: Camera2D
 var _floor: TileMapLayer
 var _water: TileMapLayer
+var _floor_top: TileMapLayer  # grass over the earth blocks of the lake's banks
 var _sources := {}  # "tileset:id" -> TileSet source id
 var _anchors := {}  # tileset -> its tiles.json (atlas rects and anchors)
 var _pages := {}  # tileset -> atlas textures
@@ -376,6 +381,12 @@ func _build_floor_layer() -> void:
 	_water.scale = _floor.scale
 	_water.position = _floor.position
 	add_child(_water)
+	_floor_top = TileMapLayer.new()
+	_floor_top.tile_set = ts
+	_floor_top.z_index = -10
+	_floor_top.scale = _floor.scale
+	_floor_top.position = _floor.position
+	add_child(_floor_top)
 
 func _set_floor(i: int, j: int, tileset: String, id: Variant) -> void:
 	var src: Array = _sources["%s:%s" % [tileset, str(id)]]
@@ -412,11 +423,7 @@ func is_water(i: float, j: float) -> bool:
 	return k + _noise.get_noise_2d(i * 9.0 + 300.0, j * 9.0) * 0.5 < 1.0
 
 func _near_water(i: int, j: int) -> bool:
-	for di in [-1, 0, 1]:
-		for dj in [-1, 0, 1]:
-			if is_water(i + di, j + dj):
-				return true
-	return false
+	return is_water(i + 1, j) or is_water(i - 1, j) or is_water(i, j + 1) or is_water(i, j - 1)
 
 func _build_world() -> void:
 	for p in PLACES.values():
@@ -425,6 +432,7 @@ func _build_world() -> void:
 		for j in range(int(VILLAGE.position.y), int(VILLAGE.end.y)):
 			_blocked[Vector2i(i, j)] = true
 	_keep_clear(WINDMILL, 2.0)
+	_plan_relief()
 	for model in ARENAS:
 		_keep_clear(ARENAS[model].center, ARENAS[model].radius + 1.5)
 	_keep_clear(PORTAL_IN, 2.5)
@@ -441,17 +449,19 @@ func _build_world() -> void:
 				_water_cells.append(c)
 				continue
 			var patch := _noise.get_noise_2d(i * 7.0 + 900.0, j * 7.0) > 0.3
+			_set_floor(i, j, tileset, _pick(bt.patches if patch else bt.floors))
 			if _near_water(i, j):
-				_set_floor(i, j, tileset, _pick(_turns(["Ground A1"])))  # earth banks
+				# Banks: an earth block (its side shows over the water) under the grass.
+				var top: Array = _sources["%s:%s" % [tileset, _pick(bt.floors)]]
+				_floor_top.set_cell(c, top[0], top[1])
+				_set_floor(i, j, tileset, _pick(_turns(["Ground A1"])))
 				_blocked[c] = true
-			else:
-				_set_floor(i, j, tileset, _pick(bt.patches if patch else bt.floors))
 			var col: Color = MAP_COLORS[b]
 			map_image.set_pixel(i, j, col.darkened(0.12) if patch else col)
 			var edge := i < 3 or j < 3 or i >= W - 3 or j >= W - 3
 			if _blocked.has(c):
 				continue
-			if not bt.overlays.is_empty() and _rng.randf() < 0.22:  # grass tufts, pebbles...
+			if not bt.overlays.is_empty() and level_at(c) == 0 and _rng.randf() < 0.22:  # grass tufts, pebbles...
 				_tile(tileset, _pick(bt.overlays), cell_of(Vector2(i + 0.5, j + 0.5)), _floor_decor())
 			var dense := _noise.get_noise_2d(i * 5.0 + 50.0, j * 5.0 - 70.0) > 0.25  # woods, rock fields
 			var chance: float = bt.density * (2.5 if dense else 1.0)
@@ -468,6 +478,7 @@ func _build_world() -> void:
 		_edge(seg[0], seg[1])
 	_build_lake()
 	_build_village()
+	_build_relief()
 	# Standing stones around the wyvern's arena.
 	for k in 10:
 		var c: Vector2 = ARENAS.wyvern_water.center + Vector2.RIGHT.rotated(k * TAU / 10.0) * (ARENAS.wyvern_water.radius + 0.6)
@@ -505,6 +516,11 @@ func _build_village() -> void:
 			["Misc E2_S", Vector2(63.5, 91.5), 9], ["Misc B6_S", Vector2(73.5, 81), 12], ["Misc B44_S", Vector2(64.2, 87.8), 4],
 			["Misc B45_S", Vector2(67.8, 82.2), 4], ["Misc A9_S", Vector2(72.5, 86.5), 8], ["Misc B11_S", Vector2(59.8, 84.5), 12]]:
 		_solid("fantasy", p[0], cell_of(p[1]), p[2])
+	for p in [["break_barrel_a", Vector2(64.3, 83.4)], ["break_barrel_b", Vector2(68.6, 84.6)], ["break_barrel_c", Vector2(63.7, 86.2)],
+			["break_jar", Vector2(67.3, 86.8)], ["break_jar", Vector2(65.2, 83.3)], ["break_straw", Vector2(61.2, 91.2)],
+			["break_straw", Vector2(64.6, 92)], ["break_crate", Vector2(69.6, 87.2)], ["break_woodpile", Vector2(74, 84)],
+			["break_crate", Vector2(73.2, 82.2)]]:
+		_breakable(p[0], cell_of(p[1]), 7)
 	var mill := StaticBody2D.new()
 	mill.position = cell_of(WINDMILL)
 	var cs := CollisionShape2D.new()
@@ -515,42 +531,79 @@ func _build_village() -> void:
 	world.add_child(mill)
 	_fx("windmill", Vector2.ZERO, mill).speed_scale = 0.6
 
-## A house 2 cells wide and `length` deep: walls on the edges of its cells,
-## a door and windows on the front, a pitched roof raised on the walls with a
-## hipped end. Drawn as one piece (the parts in a fixed order), sorted with
-## the characters by its centre.
+## A house 2 cells wide and `length` deep: walls on the edges of its cells
+## with a doorway on the front, a wooden floor and a few things inside, a
+## pitched roof raised on the walls with a hipped end. The back walls are
+## sorted by the house's back corner (the hero inside is always in front of
+## them); the front walls and the roof form one piece that fades away while
+## the hero is inside.
 func _house(i0: int, j0: int, length: int, look: String) -> void:
 	var parts: Array = HOUSE_LOOKS[look]
 	var i1 := i0 + 1
 	var j1 := j0 + length - 1
-	var house := StaticBody2D.new()
-	house.collision_layer = 1
-	house.position = cell_pos(i0 + 1, j0 + length / 2.0)
-	world.add_child(house)
-	var poly := CollisionPolygon2D.new()
-	poly.polygon = PackedVector2Array([cell_pos(i0, j0) - house.position, cell_pos(i1 + 1, j0) - house.position,
-		cell_pos(i1 + 1, j1 + 1) - house.position, cell_pos(i0, j1 + 1) - house.position])
-	house.add_child(poly)
+	var door_j := j0 + (length - 1) / 2
+	var back := Node2D.new()
+	back.position = cell_pos(i0, j0)
+	world.add_child(back)
+	var front := Node2D.new()
+	front.position = cell_pos(i0 + 1, j0 + length / 2.0)
+	world.add_child(front)
 	var raise := 128.0 / float(_anchors.fantasy.res)  # the walls' height
-	var at := func(i: int, j: int, up: float = 0.0) -> Vector2:
-		return cell_pos(i + 0.5, j + 0.5) - house.position + Vector2(0, -up)
+	var at := func(node: Node2D, i: int, j: int, up: float = 0.0) -> Vector2:
+		return cell_pos(i + 0.5, j + 0.5) - node.position + Vector2(0, -up)
 	for j in range(j0, j1 + 1):  # back walls
-		_tile("fantasy", parts[0] + "_W", at.call(i0, j), house)
+		_tile("fantasy", parts[0] + "_W", at.call(back, i0, j), back)
 	for i in range(i0, i1 + 1):
-		_tile("fantasy", parts[0] + "_N", at.call(i, j0), house)
-	for i in range(i0, i1 + 1):  # front walls
-		_tile("fantasy", parts[1] + "_S" if i == i0 else parts[0] + "_S", at.call(i, j1), house)
+		_tile("fantasy", parts[0] + "_N", at.call(back, i, j0), back)
+	for i in range(i0, i1 + 1):  # front walls, a doorway on the front-right side
+		_tile("fantasy", parts[1] + "_S" if i == i0 else parts[0] + "_S", at.call(front, i, j1), front)
 	for j in range(j0, j1 + 1):
-		_tile("fantasy", (parts[1] if j == j1 else parts[0]) + "_E", at.call(i1, j), house)
-	_tile("fantasy", "Door A1_E", at.call(i1, j0 + (length - 1) / 2), house)
+		if j != door_j:
+			_tile("fantasy", (parts[1] if j == j1 else parts[0]) + "_E", at.call(front, i1, j), front)
 	for j in range(j0, j1 + 1):  # the roof
-		_tile("fantasy", parts[2] + "1_W", at.call(i0, j, raise), house)
-		_tile("fantasy", parts[2] + "1_E", at.call(i1, j, raise), house)
+		_tile("fantasy", parts[2] + "1_W", at.call(front, i0, j, raise), front)
+		_tile("fantasy", parts[2] + "1_E", at.call(front, i1, j, raise), front)
 	for i in range(i0, i1 + 1):
-		_tile("fantasy", parts[2] + "6_E", at.call(i, j1, raise), house)
+		_tile("fantasy", parts[2] + "6_E", at.call(front, i, j1, raise), front)
+	# Walls as segments, open at the door.
+	var walls := StaticBody2D.new()
+	walls.collision_layer = 1
+	world.add_child(walls)
+	var segs := [[cell_pos(i0, j0), cell_pos(i1 + 1, j0)], [cell_pos(i0, j0), cell_pos(i0, j1 + 1)],
+		[cell_pos(i0, j1 + 1), cell_pos(i1 + 1, j1 + 1)], [cell_pos(i1 + 1, j0), cell_pos(i1 + 1, door_j)],
+		[cell_pos(i1 + 1, door_j + 1), cell_pos(i1 + 1, j1 + 1)]]
+	for sg in segs:
+		if sg[0].distance_to(sg[1]) < 1.0:
+			continue
+		var cs := CollisionShape2D.new()
+		var seg := SegmentShape2D.new()
+		seg.a = sg[0]
+		seg.b = sg[1]
+		cs.shape = seg
+		walls.add_child(cs)
+	# Inside: planks, a table, something to break, a chest in the long ones.
 	for i in range(i0, i1 + 1):
 		for j in range(j0, j1 + 1):
+			_set_floor(i, j, "fantasy", _pick(_turns(["Ground F1"])))
 			map_image.set_pixel(i, j, MAP_COLORS.roof)
+	_solid("fantasy", "Misc B27_S", cell_pos(i0 + 0.5, j0 + 0.5), 8)
+	_breakable(["break_barrel_a", "break_jar", "break_crate"][(i0 + j0) % 3], cell_pos(i0 + 0.4, j1 + 0.6), 6)
+	if length > 2:
+		_solid("fantasy", "Chest A1_S", cell_pos(i1 + 0.3, j0 + 0.4), 6)
+	# Fade the front away while the hero is inside.
+	var inside := Area2D.new()
+	inside.collision_layer = 0
+	inside.collision_mask = 2
+	var poly := CollisionPolygon2D.new()
+	poly.polygon = PackedVector2Array([cell_pos(i0, j0), cell_pos(i1 + 1, j0), cell_pos(i1 + 1, j1 + 1), cell_pos(i0, j1 + 1)])
+	inside.add_child(poly)
+	add_child(inside)
+	inside.body_entered.connect(func(body):
+		if body == player:
+			create_tween().tween_property(front, "modulate:a", 0.12, 0.25))
+	inside.body_exited.connect(func(body):
+		if body == player:
+			create_tween().tween_property(front, "modulate:a", 1.0, 0.25))
 
 var _floor_decor_node: Node2D
 
@@ -562,6 +615,8 @@ func _floor_decor() -> Node2D:
 	return _floor_decor_node
 
 func _decor(b: String, tileset: String, c: Vector2, solid_only: bool) -> void:
+	var up := level_at(Vector2i(c)) > 0  # on a plateau: drawn one level higher
+	var before := world.get_child_count()
 	var table: Array = theme[b].decor
 	var total := 0.0
 	for e in table:
@@ -574,13 +629,32 @@ func _decor(b: String, tileset: String, c: Vector2, solid_only: bool) -> void:
 		roll -= e[2]
 		if roll <= 0.0:
 			var id := _pick(e[0])
-			if e[1] > 0:
-				_solid(tileset, id, cell_of(c), e[1])
+			if id.begins_with("break_"):
+				_breakable(id, cell_of(c), e[1])
+			elif e[1] > 0 or up:
+				_solid(tileset, id, cell_of(c), maxf(e[1], 2.0))
 				var px := Vector2i(clampi(int(c.x), 0, W - 1), clampi(int(c.y), 0, W - 1))
 				map_image.set_pixelv(px, map_image.get_pixelv(px).darkened(0.45))
 			else:
 				_tile(tileset, id, cell_of(c), world)
+			if up and world.get_child_count() > before:
+				var n: Node2D = world.get_child(world.get_child_count() - 1)
+				n.z_index = 1
+				for ch in n.get_children():
+					if ch is Node2D:
+						ch.position.y -= LEVEL_HEIGHT
 			return
+
+## A breakable piece of scenery (see Breakable) at a world position.
+func _breakable(name: String, at: Vector2, radius: float = 8.0) -> Breakable:
+	var b := Breakable.new()
+	b.position = at
+	b.radius = radius
+	b.material_kind = "stone" if name in ["break_jar", "break_stones", "break_rocks"] \
+		else ("soft" if name in ["break_grass", "break_grass_small", "break_straw", "break_tree_green", "break_tree_yellow"] else "wood")
+	b.sprite = _fx(name, Vector2.ZERO, b)
+	world.add_child(b)
+	return b
 
 func _edge(a: Vector2, b: Vector2) -> void:
 	var body := StaticBody2D.new()
@@ -592,6 +666,114 @@ func _edge(a: Vector2, b: Vector2) -> void:
 	cs.shape = seg
 	body.add_child(cs)
 	add_child(body)
+
+# --- relief: plateaus, cliffs, ramps -------------------------------------------
+
+## Plateaus one level up (a cliff of the pack: 128 px, 96 units): their cells
+## and the cells of their ramps, cut into the south-east face.
+const PLATEAUS := [
+	[Rect2i(84, 83, 6, 6), [85, 87]],  # plain, east of the village
+	[Rect2i(16, 68, 6, 6), [70]],  # ruins
+	[Rect2i(66, 33, 7, 6), [35]],  # pine forest
+	[Rect2i(36, 21, 6, 6), [23, 25]],  # dead lands
+	[Rect2i(70, 70, 5, 4), [71]],  # plain, north of the start
+	[Rect2i(8, 50, 7, 5), [52]],  # ruins
+	[Rect2i(88, 22, 5, 5), [24]],  # pine forest, by the wyvern
+	[Rect2i(22, 8, 6, 5), [10]],  # dead lands
+]
+const LEVEL_HEIGHT := 96.0
+var _level := {}  # Vector2i -> 1 on plateaus
+var _ramps := {}  # Vector2i -> true: cells sloping down toward +i
+
+func _plan_relief() -> void:
+	for p in PLATEAUS:
+		var r: Rect2i = p[0]
+		for i in range(r.position.x, r.end.x):
+			for j in range(r.position.y, r.end.y):
+				_level[Vector2i(i, j)] = 1
+		for j in p[1]:
+			var c := Vector2i(r.end.x - 1, j)
+			_level.erase(c)
+			_ramps[c] = true
+			for k in [-1, 0, 1]:  # keep the ramp and its foot free
+				_blocked[c + Vector2i(k, 0)] = true
+
+func level_at(c: Vector2i) -> int:
+	return _level.get(c, 0)
+
+## Height of the ground at a world position (0 below, up on plateaus, in
+## between on ramps).
+func height_at(p: Vector2) -> float:
+	var f := to_cell(p)
+	var c := Vector2i(floori(f.x), floori(f.y))
+	if _ramps.has(c):
+		return LEVEL_HEIGHT * clampf(1.0 - (f.x - c.x), 0.0, 1.0)
+	return LEVEL_HEIGHT * level_at(c)
+
+func _build_relief() -> void:
+	var walls := StaticBody2D.new()
+	walls.collision_layer = 1
+	add_child(walls)
+	var add_wall := func(a: Vector2, b: Vector2) -> void:
+		var cs := CollisionShape2D.new()
+		var seg := SegmentShape2D.new()
+		seg.a = a
+		seg.b = b
+		cs.shape = seg
+		walls.add_child(cs)
+	var raise := LEVEL_HEIGHT
+	for c in _level:
+		var b := biome_at(c.x + 0.5, c.y + 0.5)
+		# The top and the faces, sorted with the characters by the cell's centre.
+		var node := Node2D.new()
+		node.position = cell_pos(c.x + 0.5, c.y + 0.5)
+		world.add_child(node)
+		var top := _tile("fantasy", _pick(theme[b].floors), Vector2(0, -raise), node)
+		top.z_index = 0
+		var e_low := level_at(c + Vector2i(1, 0)) == 0 and not _ramps.has(c + Vector2i(1, 0))
+		var s_low := level_at(c + Vector2i(0, 1)) == 0
+		var n_low := level_at(c + Vector2i(0, -1)) == 0
+		var w_low := level_at(c + Vector2i(-1, 0)) == 0
+		if e_low and s_low:
+			_tile("fantasy", "Ground G13_S", Vector2.ZERO, node)
+		else:
+			if e_low:
+				_tile("fantasy", "Ground G12_E", Vector2.ZERO, node)
+			if s_low:
+				_tile("fantasy", "Ground G12_S", Vector2.ZERO, node)
+		if n_low:
+			_tile("fantasy", "Ground G12_N", Vector2.ZERO, node)
+		if w_low:
+			_tile("fantasy", "Ground G12_W", Vector2.ZERO, node)
+		# Cliffs block the way (except toward a ramp, handled below).
+		if level_at(c + Vector2i(1, 0)) == 0 and not _ramps.has(c + Vector2i(1, 0)):
+			add_wall.call(cell_pos(c.x + 1, c.y), cell_pos(c.x + 1, c.y + 1))
+		if s_low:
+			add_wall.call(cell_pos(c.x, c.y + 1), cell_pos(c.x + 1, c.y + 1))
+		if n_low and not _ramps.has(c + Vector2i(0, -1)):
+			add_wall.call(cell_pos(c.x, c.y), cell_pos(c.x + 1, c.y))
+		if w_low and not _ramps.has(c + Vector2i(-1, 0)):
+			add_wall.call(cell_pos(c.x, c.y), cell_pos(c.x, c.y + 1))
+		map_image.set_pixelv(c, map_image.get_pixelv(c).lightened(0.18))
+	for c in _ramps:
+		var node := Node2D.new()
+		node.position = cell_pos(c.x + 0.5, c.y + 0.5)
+		world.add_child(node)
+		_tile("fantasy", "Ground G16_E", Vector2.ZERO, node)
+		# Its sides are walls; its back (the plateau) and front (the ground) are open.
+		add_wall.call(cell_pos(c.x, c.y), cell_pos(c.x + 1, c.y))
+		add_wall.call(cell_pos(c.x, c.y + 1), cell_pos(c.x + 1, c.y + 1))
+		map_image.set_pixelv(c, Color(0.5, 0.36, 0.2))
+
+## Characters stand on the ground under them; up there, they are drawn over
+## the plateau's cells.
+func _update_heights() -> void:
+	for a in [player] + _enemies:
+		if is_instance_valid(a) and a.sprite and a.process_mode != Node.PROCESS_MODE_DISABLED:
+			var h := height_at(a.global_position)
+			if absf(a.sprite.lift - h) > 0.01:
+				a.sprite.lift = h
+			a.z_index = 1 if h > LEVEL_HEIGHT * 0.5 else 0
 
 # --- the Minotaur's dungeon --------------------------------------------------
 
@@ -665,10 +847,12 @@ func _fx(name: String, at: Vector2, parent: Node) -> AnimatedSprite2D:
 		var strip: Texture2D = load("res://local/fantasy/fx/%s.png" % name)
 		var sf := SpriteFrames.new()
 		sf.set_animation_speed("default", 14.0)
+		sf.set_animation_loop("default", not name.begins_with("break_"))
 		for k in int(m.frames):
 			var at_tex := AtlasTexture.new()
 			at_tex.atlas = strip
-			at_tex.region = Rect2(k * m.w, 0, m.w, m.h)
+			var cols := int(m.get("cols", m.frames))
+			at_tex.region = Rect2((k % cols) * m.w, (k / cols) * m.h, m.w, m.h)
 			sf.add_frame("default", at_tex)
 		_fx_frames[name] = sf
 	var s := AnimatedSprite2D.new()
@@ -824,6 +1008,7 @@ func _physics_process(delta: float) -> void:
 				e.process_mode = Node.PROCESS_MODE_INHERIT if near else Node.PROCESS_MODE_DISABLED
 		_update_area()
 		_update_biome(false)
+	_update_heights()
 	var near_fire := ""
 	for place in _bonfires:
 		if player.global_position.distance_to(_bonfires[place].global_position) < 40:

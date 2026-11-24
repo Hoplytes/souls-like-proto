@@ -66,9 +66,15 @@ var _textures := {}
 var pivot := 0.0:
 	set(v):
 		pivot = v
-		position.y = -v
+		position.y = -v - lift
 		if _sprite:
 			_apply_offset()
+## Height of the ground under the character (plateaus, ramps): it is drawn
+## that much higher.
+var lift := 0.0:
+	set(v):
+		position.y += lift - v
+		lift = v
 
 static func available() -> bool:
 	return ResourceLoader.exists(HD_FOLDER + "Idle.png")
