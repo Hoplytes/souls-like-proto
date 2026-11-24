@@ -29,12 +29,15 @@ ANCHOR = (128, 208)  # the tile diamond's centre in every 256x256 tile
 
 # --- tiles ------------------------------------------------------------------
 # Floors: full ground blocks (drawn by the game's TileMapLayer, all 4 turns).
-FLOOR_RE = re.compile(r"^Ground (A1|A2|A18|B[1-6]|C[1-6]|D1|E1|F1|F3|H1|H4|H9|H10|H11|I([1-9]|10)|J1)_[NESW]$")
+FLOOR_RE = re.compile(r"^(Ground (A1|A2|A18|B[1-6]|C[1-6]|D1|E1|F1|F3|H1|H4|H9|H10|H11|I([1-9]|10)|J1"
+                      r"|A([3-9]|1[0-2]|19|2[0-4])|E([2-9]|1[0-5])|J([2-9]|10))|Flora A[1-7])_[NESW]$")
+# (the ground overlays -- grass tufts, pebbles, flowers -- are on the grid too:
+# the game draws them with a second tile layer instead of one node each)
 # Scenery, ground overlays, house parts, cliffs and ramps kept.
 KEEP_RE = re.compile(r"^(Ground (A([3-9]|1[0-2]|19|2[0-4])|B[1-6]|C[1-6]|E([2-9]|1[0-5])|J([2-9]|10))_[NESW]"
                      r"|Tree .*|Stone .*|Flora .*|WallFlora .*|Misc .*_S|Wall A.*|FirePlace|Torch.*|Chest A1_S"
                      r"|Wall (D|F|G)(1|7)_[NESW]|Roof (C|D)(1|6)_[NESW]|Door A1_[NESW]"
-                     r"|Ground G(12|13|16|22)_[NESW])$")
+                     r"|Ground G(12|13|16|22)_[NESW]|Wall B([1-9]|1[01])_[NESW]|Wall E1[5-8]_[NESW])$")
 FLOOR_CELL = (136, 96)  # floor grid cell, the diamond's centre in the middle
 FLOOR_COLS = 14
 
@@ -156,7 +159,9 @@ FX = {"Props/Fire": "flame", "Props/Torch 1": "torch", "Props/PortalIdle": "port
       "Destructible tiles/grass explosion large": "break_grass", "Destructible tiles/Grass explosion small": "break_grass_small",
       "Destructible tiles/Tree Green Explosion": "break_tree_green", "Destructible tiles/Tree Yellow Explosion": "break_tree_yellow",
       "Destructible tiles/stone explosion Small": "break_stones", "Destructible tiles/stone explosion large": "break_rocks",
-      "Destructible tiles/wood explosion Small": "break_crate", "Destructible tiles/wood explosion large": "break_woodpile"}
+      "Destructible tiles/wood explosion Small": "break_crate", "Destructible tiles/wood explosion large": "break_woodpile",
+      # Chips flying off when breakable scenery is hit (played once).
+      "Destructible tiles/Wood damage": "hit_wood", "Destructible tiles/Stone damage": "hit_stone"}
 
 def convert_fx():
     """Each animation: its frames side by side, cropped to their common box.

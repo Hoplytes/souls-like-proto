@@ -11,7 +11,7 @@ var _tex: ImageTexture
 var _hall_tex: ImageTexture
 var _t := 0.0
 
-const SCALE := 2.8  # map pixels per cell (half-width of a cell's diamond)
+const SCALE := 270.0 / Game.W  # map pixels per cell (half-width of a cell's diamond)
 const HALL_SCALE := 3.2
 
 func _ready() -> void:

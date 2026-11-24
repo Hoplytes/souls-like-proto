@@ -280,6 +280,7 @@ func _run() -> void:
 	log_lines.append("music in phase 2: " + _music_state())
 	# A wide view of the whole level.
 	main._ended = true  # stops the game from moving the camera limits back
+	main.show_all_chunks()
 	var cam: Camera2D = Fx.camera
 	cam.reparent(main)
 	cam.position_smoothing_enabled = false

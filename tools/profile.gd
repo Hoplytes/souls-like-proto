@@ -46,8 +46,8 @@ func _walk(action: String, t: float) -> void:
 func _run() -> void:
 	await get_tree().create_timer(2.0).timeout
 	main.player.invulnerable = true
-	_log.append("--- prairie -> caves (north)")
-	main.teleport_to_cell(Vector2(64, 60))
+	_log.append("--- start -> north, along the road to the dead lands")
+	main.teleport_to_cell(Vector2(88, 82))
 	await get_tree().create_timer(1.0).timeout
 	await _walk("move_up", 6.0)
 	_log.append("--- -> snow (east)")
