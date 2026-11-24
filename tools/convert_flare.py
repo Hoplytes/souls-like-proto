@@ -97,8 +97,25 @@ def convert(txt, out_dir, wanted, scale, cell, feet):
     json.dump(meta, open(os.path.join(out_dir, "anims.json"), "w"), indent=1)
     return meta
 
+# Floor tiles of each tileset (drawn by the game's TileMapLayer).
+FLOOR_IDS = {
+    "grass": list(range(16, 48)),
+    "snow": list(range(16, 48)),
+    "cave": list(range(16, 32)) + list(range(48, 56)),
+    "ruins": list(range(24, 32)) + list(range(105, 120)) + list(range(153, 167)),
+    "dungeon": [16, 17, 18, 19, 22, 23, 26, 29, 30] + list(range(32, 48)) + list(range(60, 64)),
+}
+FLOOR_CELL = (192, 112)  # floor grid cell: the tile's anchor sits at its centre
+FLOOR_COLS = 10
+
 def convert_tiles(defs, ids, scale, out_name, root=SRC):
-    """Cut tiles out of a Flare tileset (a tileset may use several images)."""
+    """Cut tiles out of a Flare tileset (a tileset may use several images) and
+    pack them into atlases, so the game draws a whole biome with a couple of
+    textures (one texture per tile meant ~1000 draw calls per frame):
+    - atlas_<page>.png: every tile, shelf-packed;
+    - floors.png: the floor tiles in a grid, each anchored at its cell centre.
+    tiles.json: {"res", "tiles": {id: [page, x, y, w, h, ax, ay]},
+    "floors": {id: index in the grid}, "floor_cell", "floor_cols"}."""
     tiles, cache, img = {}, {}, None
     for line in open(os.path.join(root, "tilesetdefs", defs + ".txt")):
         line = line.strip()
@@ -109,16 +126,53 @@ def convert_tiles(defs, ids, scale, out_name, root=SRC):
             v = [int(x) for x in line[5:].split(",")[:7]]
             tiles[v[0]] = v[1:] + [img]
     out = os.path.join(OUT, "tiles", out_name)
-    os.makedirs(out, exist_ok=True)
+    import shutil
+    shutil.rmtree(out, ignore_errors=True)
+    os.makedirs(out)
     scale *= RES
-    meta = {"res": RES}
+    pieces = {}
     for t in ids:
         x, y, w, h, ox, oy, im = tiles[t]
         piece = im.crop((x, y, x + w, y + h)).resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
-        piece.save(os.path.join(out, f"{t}.png"), optimize=True)
-        meta[str(t)] = [round(ox * scale), round(oy * scale)]
-    json.dump(meta, open(os.path.join(out, "anchors.json"), "w"), indent=1)
-    print("tiles", out_name, len(ids))
+        pieces[t] = (piece, round(ox * scale), round(oy * scale))
+    meta = {"res": RES, "tiles": {}, "floors": {}, "floor_cell": list(FLOOR_CELL), "floor_cols": FLOOR_COLS}
+    # Every tile, shelf-packed into pages of at most 2048 x 4096.
+    W, H = 2048, 4096
+    pages, page, x, y, shelf = [], [], 0, 0, 0
+    for t in sorted(ids, key=lambda t: -pieces[t][0].height):
+        piece, ax, ay = pieces[t]
+        if x + piece.width > W:
+            x, y, shelf = 0, y + shelf + 2, 0
+        if y + piece.height > H:
+            pages.append(page)
+            page, x, y, shelf = [], 0, 0, 0
+        page.append((t, x, y))
+        meta["tiles"][str(t)] = [len(pages), x, y, piece.width, piece.height, ax, ay]
+        x += piece.width + 2
+        shelf = max(shelf, piece.height)
+    pages.append(page)
+    for k, pg in enumerate(pages):
+        height = max(y + pieces[t][0].height for t, x, y in pg)
+        sheet = Image.new("RGBA", (W, height))
+        for t, px, py in pg:
+            sheet.paste(pieces[t][0], (px, py))
+        sheet.save(os.path.join(out, f"atlas_{k}.png"), optimize=True)
+    # The floors, on a grid.
+    floors = [t for t in FLOOR_IDS.get(out_name, []) if t in pieces]
+    # Floors are centred in their cell (their Flare anchors are not reliable:
+    # some ruins slabs have odd ones); cells tall enough for the tallest.
+    cw = FLOOR_CELL[0]
+    ch = max([FLOOR_CELL[1]] + [pieces[t][0].height + (pieces[t][0].height % 2) for t in floors])
+    meta["floor_cell"] = [cw, ch]
+    grid = Image.new("RGBA", (cw * FLOOR_COLS, ch * ((len(floors) + FLOOR_COLS - 1) // FLOOR_COLS)))
+    for k, t in enumerate(floors):
+        piece, ax, ay = pieces[t]
+        cx, cy = (k % FLOOR_COLS) * cw, (k // FLOOR_COLS) * ch
+        grid.alpha_composite(piece, (cx + (cw - piece.width) // 2, cy + (ch - piece.height) // 2))
+        meta["floors"][str(t)] = k
+    grid.save(os.path.join(out, "floors.png"), optimize=True)
+    json.dump(meta, open(os.path.join(out, "tiles.json"), "w"), indent=1)
+    print("tiles", out_name, len(ids), "pages", len(pages))
 
 FIGHT = ["stance", "run", "swing", "hit", "die"]
 

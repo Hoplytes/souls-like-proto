@@ -83,7 +83,8 @@ var music: Music
 var cam: Camera2D
 var _floor: TileMapLayer
 var _sources := {}  # "tileset:id" -> TileSet source id
-var _anchors := {}  # tileset -> {id: anchor}
+var _anchors := {}  # tileset -> its tiles.json (atlas rects and anchors)
+var _pages := {}  # tileset -> atlas textures
 var _noise := FastNoiseLite.new()
 var _rng := RandomNumberGenerator.new()
 var _bonfires := {}  # place -> Bonfire
@@ -129,7 +130,14 @@ func _ready() -> void:
 	_noise.seed = 4
 	_noise.frequency = 0.02
 	for t in ["grass", "ruins", "snow", "cave", "dungeon"]:
-		_anchors[t] = JSON.parse_string(FileAccess.get_file_as_string("res://assets/flare/tiles/%s/anchors.json" % t))
+		_anchors[t] = JSON.parse_string(FileAccess.get_file_as_string("res://assets/flare/tiles/%s/tiles.json" % t))
+		var pages := []
+		for k in 4:
+			var path := "res://assets/flare/tiles/%s/atlas_%d.png" % [t, k]
+			if not ResourceLoader.exists(path):
+				break
+			pages.append(load(path))
+		_pages[t] = pages
 	world_rect = Rect2(-W * TW / 2.0 - 40, -300, W * TW + 80, W * TH + 340)
 	start_pos = cell_of(PLACES.prairie.cell) + Vector2(0, 30)
 	arena_center = cell_of(ARENAS.minotaur.center)
@@ -198,6 +206,11 @@ func _ready() -> void:
 			sc.main = self
 			sc.out = a.trim_prefix("--showcase=")
 			add_child(sc)
+		if a.begins_with("--profile="):
+			var pr: Node = load("res://tools/profile.gd").new()
+			pr.main = self
+			pr.out = a.trim_prefix("--profile=")
+			add_child(pr)
 		if a.begins_with("--autotest="):
 			var t: Node = load("res://tools/autotest.gd").new()
 			t.main = self
@@ -233,11 +246,14 @@ func _ambience_stream(name: String) -> AudioStreamOggVorbis:
 # --- tiles -----------------------------------------------------------------
 
 func _tile(tileset: String, id: int, at: Vector2, parent: Node, z: int = 0) -> Sprite2D:
+	# All the tiles of a tileset share one atlas: the renderer can batch them.
 	var s := Sprite2D.new()
-	s.texture = load("res://assets/flare/tiles/%s/%d.png" % [tileset, id])
+	var a: Array = _anchors[tileset].tiles[str(id)]  # [page, x, y, w, h, ax, ay]
+	s.texture = _pages[tileset][int(a[0])]
+	s.region_enabled = true
+	s.region_rect = Rect2(a[1], a[2], a[3], a[4])
 	s.centered = false
-	var a: Array = _anchors[tileset][str(id)]
-	s.offset = -Vector2(a[0], a[1])
+	s.offset = -Vector2(a[5], a[6])
 	s.scale = Vector2.ONE / float(_anchors[tileset].get("res", 1))
 	s.position = at
 	s.z_index = z
@@ -263,21 +279,21 @@ func _build_floor_layer() -> void:
 	var ts := TileSet.new()
 	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
 	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_DOWN
-	var res := float(_anchors.grass.get("res", 1))  # tiles are stored at res x their size
+	var res := float(_anchors.grass.res)  # tiles are stored at res x their size
 	ts.tile_size = Vector2i(int(TW * res), int(TH * res))
-	var floors := {"grass": [[16, 47]], "ruins": [[24, 31], [105, 119], [153, 166]], "snow": [[16, 47], [344, 363]],
-		"cave": [[16, 31], [48, 55]], "dungeon": [[16, 19], [22, 23], [26, 26], [29, 47], [60, 63]]}
-	for tileset in floors:
-		for r in floors[tileset]:
-			for id in range(r[0], r[1] + 1):
-				if not _anchors[tileset].has(str(id)) or str(id) == "res":
-					continue
-				var tex: Texture2D = load("res://assets/flare/tiles/%s/%d.png" % [tileset, id])
-				var src := TileSetAtlasSource.new()
-				src.texture = tex
-				src.texture_region_size = Vector2i(tex.get_size())
-				src.create_tile(Vector2i.ZERO)
-				_sources["%s:%d" % [tileset, id]] = ts.add_source(src)
+	# One atlas source per tileset: the floor tiles on a grid (floors.png).
+	for tileset in _anchors:
+		var meta: Dictionary = _anchors[tileset]
+		var src := TileSetAtlasSource.new()
+		src.texture = load("res://assets/flare/tiles/%s/floors.png" % tileset)
+		src.texture_region_size = Vector2i(int(meta.floor_cell[0]), int(meta.floor_cell[1]))
+		var sid := ts.add_source(src)
+		var cols := int(meta.floor_cols)
+		for id in meta.floors:
+			var k := int(meta.floors[id])
+			var at := Vector2i(k % cols, k / cols)
+			src.create_tile(at)
+			_sources["%s:%s" % [tileset, id]] = [sid, at]
 	_floor = TileMapLayer.new()
 	_floor.tile_set = ts
 	_floor.z_index = -10
@@ -286,7 +302,8 @@ func _build_floor_layer() -> void:
 	_floor.position = cell_pos(0.5, 0.5) - _floor.map_to_local(Vector2i.ZERO) / res
 
 func _set_floor(i: int, j: int, tileset: String, id: int) -> void:
-	_floor.set_cell(Vector2i(i, j), _sources["%s:%d" % [tileset, id]], Vector2i.ZERO)
+	var src: Array = _sources["%s:%d" % [tileset, id]]
+	_floor.set_cell(Vector2i(i, j), src[0], src[1])
 
 func _pick(ranges: Array) -> int:
 	var r: Array = ranges[_rng.randi() % ranges.size()]

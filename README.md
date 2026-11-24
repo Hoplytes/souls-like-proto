@@ -71,6 +71,7 @@ Flare est stocké à sa pleine résolution (`RES = 2` dans `tools/convert_flare.
 | `tools/convert_flare.py` | Convertit l'art de Flare (héros, ennemis, tuiles) |
 | `tools/make_sfx.py` | Synthétise les bruitages |
 | `tools/autotest.gd` | Partie automatique avec captures (`godot -- --autotest=<dossier>`) |
+| `tools/profile.gd` | Traverse des biomes et note les images lentes (`godot -- --profile=<dossier>`) |
 | `tools/showcase.gd` | Filme les mouvements du héros (`godot -- --showcase=<dossier>`) |
 
 ## Graphismes

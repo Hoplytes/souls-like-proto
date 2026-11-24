@@ -32,7 +32,7 @@ var _swing_t := 0.0
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	for a in args:
-		if a.begins_with("--autotest=") or a.begins_with("--showcase="):
+		if a.begins_with("--autotest=") or a.begins_with("--showcase=") or a.begins_with("--profile="):
 			get_tree().change_scene_to_file.call_deferred("res://scenes/game.tscn")
 			return
 	Game.setup_inputs()
