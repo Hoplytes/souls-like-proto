@@ -200,7 +200,8 @@ const LOAD_TEXT := {
 }
 
 func _refresh() -> void:
-	var knight: bool = HeroConfig.data.model == "hd_knight"
+	var model: String = HeroConfig.data.model
+	var knight := model != "flare"  # a finished character: the equipment lines do not apply
 	for i in _rows.size():
 		var key: String = _rows[i][0]
 		_rows[i][1].text = HeroConfig.label(key, HeroConfig.data[key])
@@ -208,12 +209,19 @@ func _refresh() -> void:
 		var greyed := knight and key != "model"
 		row.modulate = Color(0.45, 0.45, 0.45) if greyed else (Color(1.15, 1.05, 0.85) if i == _sel else Color(0.85, 0.85, 0.85))
 	var w: String = HeroConfig.data.weapon
-	_info.text = "Chevalier HD : épée et bouclier, ses propres animations (roulade, blocage)." if knight \
-		else "%s — %s\nArmure %s : roulade %s" % [Weapons.DATA[w].name, FAMILY_TEXT[Weapons.DATA[w].family],
+	if model == "pack_hero":
+		_info.text = "Épée et bouclier rond : trois coups différents, pas chassés quand il verrouille un ennemi."
+	elif knight:
+		_info.text = "Chevalier HD : épée et bouclier, ses propres animations (roulade, blocage)."
+	else:
+		_info.text = "%s — %s\nArmure %s : roulade %s" % [Weapons.DATA[w].name, FAMILY_TEXT[Weapons.DATA[w].family],
 			LOAD_TEXT[Player.load_class(HeroConfig.data)][0], LOAD_TEXT[Player.load_class(HeroConfig.data)][1]]
 	if _preview:
 		_preview.queue_free()
-	if knight:
+	if model == "pack_hero":
+		_preview = HdSprite.flare("pack/hero")
+		_preview.scale = Vector2.ONE * 1.5  # its sheets are small
+	elif knight:
 		_preview = HdSprite.new()
 	else:
 		_preview = AvatarSprite.new()

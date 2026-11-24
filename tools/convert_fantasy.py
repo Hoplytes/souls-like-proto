@@ -1,0 +1,163 @@
+"""Convert SmallScaleInt's "Fantasy tileset - 2D Isometric" (licensed: the
+output goes to local/fantasy/, which is git-ignored here and lives in the
+private repo Hoplytes/souls-like-assets; never commit it to this repo).
+
+Run: python3 tools/convert_fantasy.py <the pack's folder or zip> [local/fantasy]
+
+Output, in the same formats as tools/convert_flare.py:
+- tiles/: atlas_<page>.png + floors.png + tiles.json
+  {"res", "tiles": {name: [page, x, y, w, h, ax, ay]}, "floors": {name: index},
+   "floor_cell", "floor_cols"}; tile names are the pack's file names without
+  ".png" (e.g. "Tree A1_S"). Every 256x256 tile stands on a 128x64 diamond
+  centred at (128, 208).
+- chars/<name>/: one packed sheet per animation + anims.json (15 frames,
+  8 rows E, SE, S, SW, W, NW, N, NE; frames cropped and packed)."""
+import json, os, re, shutil, sys, tempfile, zipfile
+from PIL import Image
+
+src = sys.argv[1]
+OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "..", "local", "fantasy")
+if src.endswith(".zip"):
+    tmp = tempfile.mkdtemp()
+    zipfile.ZipFile(src).extractall(tmp)
+    src = tmp
+ROOT = next(os.path.join(d) for d, subs, _ in os.walk(src) if "Environment" in subs)
+ENV = os.path.join(ROOT, "Environment")
+
+RES = 128 / 96  # the pack's pixels per world unit (a 96-unit cell is 128 px wide)
+ANCHOR = (128, 208)  # the tile diamond's centre in every 256x256 tile
+
+# --- tiles ------------------------------------------------------------------
+# Floors: full ground blocks (drawn by the game's TileMapLayer, all 4 turns).
+FLOOR_RE = re.compile(r"^Ground (A1|A2|A18|B[1-6]|C[1-6]|D1|E1|F1|F3|H1|H4|H9|H10|H11|I([1-9]|10)|J1)_[NESW]$")
+# Scenery and ground overlays kept (cliffs, raised blocks and buildings are
+# left out: the world is flat for now).
+KEEP_RE = re.compile(r"^(Ground (A([3-9]|1[0-2]|19|2[0-4])|B[1-6]|C[1-6]|E([2-9]|1[0-5])|J([2-9]|10))_[NESW]"
+                     r"|Tree .*|Stone .*|Flora .*|WallFlora .*|Misc .*_S|Wall A.*|FirePlace|Torch.*|Chest A1_S)$")
+FLOOR_CELL = (136, 96)  # floor grid cell, the diamond's centre in the middle
+FLOOR_COLS = 14
+
+def convert_tiles():
+    names = sorted(f[:-4] for f in os.listdir(ENV) if f.endswith(".png"))
+    floors = [n for n in names if FLOOR_RE.match(n)]
+    keep = [n for n in names if KEEP_RE.match(n) or n in floors]
+    out = os.path.join(OUT, "tiles")
+    shutil.rmtree(out, ignore_errors=True)
+    os.makedirs(out)
+    pieces = {}
+    for n in keep:
+        im = Image.open(os.path.join(ENV, n + ".png")).convert("RGBA")
+        b = im.getbbox()
+        if b:
+            pieces[n] = (im.crop(b), ANCHOR[0] - b[0], ANCHOR[1] - b[1], im)
+    meta = {"res": RES, "tiles": {}, "floors": {}, "floor_cell": list(FLOOR_CELL), "floor_cols": FLOOR_COLS}
+    W, H = 2048, 4096
+    pages, page, x, y, shelf = [], [], 0, 0, 0
+    for n in sorted(pieces, key=lambda n: -pieces[n][0].height):
+        piece, ax, ay, _ = pieces[n]
+        if x + piece.width > W:
+            x, y, shelf = 0, y + shelf + 2, 0
+        if y + piece.height > H:
+            pages.append(page)
+            page, x, y, shelf = [], 0, 0, 0
+        page.append((n, x, y))
+        meta["tiles"][n] = [len(pages), x, y, piece.width, piece.height, ax, ay]
+        x += piece.width + 2
+        shelf = max(shelf, piece.height)
+    pages.append(page)
+    for k, pg in enumerate(pages):
+        sheet = Image.new("RGBA", (W, max(py + pieces[n][0].height for n, px, py in pg)))
+        for n, px, py in pg:
+            sheet.paste(pieces[n][0], (px, py))
+        sheet.save(os.path.join(out, f"atlas_{k}.png"), optimize=True)
+    cw, ch = FLOOR_CELL
+    floors = [n for n in floors if n in pieces]
+    grid = Image.new("RGBA", (cw * FLOOR_COLS, ch * ((len(floors) + FLOOR_COLS - 1) // FLOOR_COLS)))
+    for k, n in enumerate(floors):
+        full = pieces[n][3]
+        cell = full.crop((ANCHOR[0] - cw // 2, ANCHOR[1] - ch // 2, ANCHOR[0] + cw // 2, ANCHOR[1] + ch // 2))
+        grid.paste(cell, ((k % FLOOR_COLS) * cw, (k // FLOOR_COLS) * ch))
+        meta["floors"][n] = k
+    grid.save(os.path.join(out, "floors.png"), optimize=True)
+    json.dump(meta, open(os.path.join(out, "tiles.json"), "w"), indent=0)
+    print("tiles", len(pieces), "pages", len(pages), "floors", len(floors))
+
+# --- characters --------------------------------------------------------------
+CHARS = {"Player": "hero", "Enemy 1": "skeleton_a", "Enemy 2": "skeleton_b", "Enemy 3": "skeleton_c",
+         "NPC1": "brigand_a", "NPC2": "brigand_b", "NPC3": "brigand_c"}
+ANIMS = ["Idle", "Walk", "Run", "StrafeLeft", "StrafeRight", "RunBackwards", "Attack1", "Attack2", "Attack4",
+         "Attack5", "AttackRun", "TakeDamage", "Die", "CrouchIdle", "CrouchRun", "Taunt"]
+CELL, FRAMES = 128, 15
+FEET = [64, 88]
+
+def convert_chars():
+    for folder, name in CHARS.items():
+        out = os.path.join(OUT, "chars", name)
+        shutil.rmtree(out, ignore_errors=True)
+        os.makedirs(out)
+        meta = {"cell": CELL, "feet": FEET, "res": RES, "packed": True, "anims": {}}
+        for anim in ANIMS:
+            im = Image.open(os.path.join(ROOT, "Characters", folder, anim + ".png")).convert("RGBA")
+            n = im.width // CELL
+            crops = []
+            for prow in range(8):
+                # The pack's rows turn W, SW, S, SE, E, NE, N, NW; ours E, SE, S, ...
+                row = (4 - prow) % 8
+                for f in range(n):
+                    c = im.crop((f * CELL, prow * CELL, f * CELL + CELL, prow * CELL + CELL))
+                    b = c.getbbox()
+                    crops.append((row, f, c.crop(b) if b else None, b))
+            width = 1024
+            rects = [[[0, 0, 0, 0, 0, 0] for _ in range(n)] for _ in range(8)]
+            x = y = shelf = 0
+            placed = []
+            for row, f, c, b in sorted(crops, key=lambda c: -(c[2].height if c[2] else 0)):
+                if c is None:
+                    continue
+                if x + c.width > width:
+                    x, y, shelf = 0, y + shelf + 2, 0
+                placed.append((c, x, y))
+                rects[row][f] = [x, y, c.width, c.height, b[0], b[1]]
+                x += c.width + 2
+                shelf = max(shelf, c.height)
+            sheet = Image.new("RGBA", (width, max(1, y + shelf)))
+            for c, px, py in placed:
+                sheet.paste(c, (px, py))
+            sheet.save(os.path.join(out, anim + ".png"), optimize=True)
+            meta["anims"][anim] = {"frames": n, "rects": rects}
+        json.dump(meta, open(os.path.join(out, "anims.json"), "w"))
+        print("char", name)
+
+# --- animated props -------------------------------------------------------------
+FX = {"Fire2": "bonfire", "Fire": "flame", "Torch 1": "torch", "PortalIdle": "portal"}
+
+def convert_fx():
+    """Each animation: its frames side by side, cropped to their common box.
+    fx.json: {name: {frames, w, h, ax, ay}}, (ax, ay) the tile anchor (or,
+    for the 128 px flame, the base of the fire) inside a frame."""
+    out = os.path.join(OUT, "fx")
+    shutil.rmtree(out, ignore_errors=True)
+    os.makedirs(out)
+    meta = {}
+    for folder, name in FX.items():
+        d = os.path.join(ROOT, "Animations", "Props", folder)
+        frames = [Image.open(os.path.join(d, f)).convert("RGBA") for f in sorted(os.listdir(d)) if f.endswith(".png")]
+        box = None
+        for im in frames:
+            b = im.getbbox()
+            if b:
+                box = b if box is None else (min(box[0], b[0]), min(box[1], b[1]), max(box[2], b[2]), max(box[3], b[3]))
+        w, h = box[2] - box[0], box[3] - box[1]
+        strip = Image.new("RGBA", (w * len(frames), h))
+        for k, im in enumerate(frames):
+            strip.paste(im.crop(box), (k * w, 0))
+        strip.save(os.path.join(out, name + ".png"), optimize=True)
+        anchor = (64, 72) if frames[0].width == 128 else ANCHOR
+        meta[name] = {"frames": len(frames), "w": w, "h": h, "ax": anchor[0] - box[0], "ay": anchor[1] - box[1]}
+    json.dump(meta, open(os.path.join(out, "fx.json"), "w"), indent=1)
+    print("fx", list(meta))
+
+if "--fx-only" not in sys.argv:
+    convert_tiles()
+    convert_chars()
+convert_fx()

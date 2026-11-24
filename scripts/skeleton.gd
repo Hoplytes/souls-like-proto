@@ -18,6 +18,13 @@ const TYPES := {
 	"antlion": {"hp": 110, "damage": 24, "speed": 48.0, "aggro": 140.0, "sound": "antlion"},
 	"ice_ant": {"hp": 60, "damage": 16, "speed": 64.0, "aggro": 160.0, "sound": "antlion"},
 	"fire_ant": {"hp": 65, "damage": 18, "speed": 64.0, "aggro": 160.0, "sound": "antlion"},
+	# Characters of the fantasy pack (licensed, res://local/fantasy/chars/).
+	"pack/skeleton_a": {"hp": 70, "damage": 18, "speed": 52.0, "aggro": 150.0, "sound": "skeleton"},
+	"pack/skeleton_b": {"hp": 55, "damage": 22, "speed": 50.0, "aggro": 160.0, "sound": "skeleton"},
+	"pack/skeleton_c": {"hp": 100, "damage": 18, "speed": 44.0, "aggro": 140.0, "sound": "skeleton"},
+	"pack/brigand_a": {"hp": 60, "damage": 16, "speed": 62.0, "aggro": 170.0, "sound": "goblin"},
+	"pack/brigand_b": {"hp": 75, "damage": 20, "speed": 56.0, "aggro": 160.0, "sound": "goblin"},
+	"pack/brigand_c": {"hp": 50, "damage": 14, "speed": 68.0, "aggro": 180.0, "sound": "goblin"},
 }
 
 var SPEED := 52.0

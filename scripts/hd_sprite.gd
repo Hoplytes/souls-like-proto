@@ -19,7 +19,8 @@ const HD_SHEETS := {
 	"block": "ShieldBlockMid", "heal": "CastSpell",
 }
 # Frame counts of the matching LPC animations, to keep the same timings.
-const LPC_FRAMES := {"idle": 2, "walk": 9, "slash": 6, "thrust": 8, "hurt": 6, "jump": 5}
+const LPC_FRAMES := {"idle": 2, "walk": 9, "slash": 6, "thrust": 8, "hurt": 6, "jump": 5,
+	"strafe_left": 9, "strafe_right": 9, "back": 9, "march": 9}
 
 const HD_FOLDER := "res://local/hd_knight/"
 
@@ -46,7 +47,7 @@ static func texture(path: String) -> Texture2D:
 
 ## Loads every sheet of a Flare character in advance (see Game._preload).
 static func preload_flare(name: String) -> void:
-	var folder := "res://assets/flare/%s/" % name
+	var folder := folder_of(name)
 	var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(folder + "anims.json"))
 	for a in meta.anims:
 		texture(folder + a + ".png")
@@ -72,15 +73,46 @@ static func available() -> bool:
 	return ResourceLoader.exists(HD_FOLDER + "Idle.png")
 
 ## A Flare enemy converted by tools/convert_flare.py (assets/flare/<name>/).
+## Characters of SmallScaleInt's isometric fantasy pack (licensed, in
+## res://local/fantasy/chars/, see tools/convert_fantasy.py): our animation
+## names -> the pack's. They have three different swings for the combo,
+## strafing steps and a backward run, used when locked on an enemy.
+const PACK_FOLDER := "res://local/fantasy/chars/"
+const PACK_SHEETS := {
+	"idle": "Idle", "walk": "Run", "march": "Walk", "slash": "Attack1", "slash2": "AttackRun", "slash3": "Attack2",
+	"slash_heavy": "Attack4", "thrust": "Attack1", "hurt": "Die", "stagger": "TakeDamage", "block": "CrouchIdle",
+	"block_start": "Attack5", "jump": "CrouchRun", "heal": "Taunt", "strafe_left": "StrafeLeft",
+	"strafe_right": "StrafeRight", "back": "RunBackwards",
+}
+const FLARE_SHEETS := {"idle": "stance", "walk": "run", "slash": "swing", "slash_heavy": "swing", "thrust": "swing",
+	"hurt": "die", "stagger": "hit", "block": "block", "block_start": "block", "jump": "run", "heal": "stance"}
+
+## "pack/<name>" is a character of the fantasy pack, anything else a Flare one.
+static func folder_of(name: String) -> String:
+	if name.begins_with("pack/"):
+		return PACK_FOLDER + name.trim_prefix("pack/") + "/"
+	return "res://assets/flare/%s/" % name
+
+static func pack_available(name: String = "hero") -> bool:
+	return ResourceLoader.exists(PACK_FOLDER + name + "/Idle.png")
+
+## Draws the sheets at 1/r of their size (see res).
+func set_res(r: float) -> void:
+	res = r
+	_sprite.scale = Vector2.ONE / r
+	_apply_offset()
+
+func has_anim(name: String) -> bool:
+	return sheets.has(name) and frames_of.has(sheets[name])
+
 static func flare(name: String) -> HdSprite:
 	var s := HdSprite.new()
-	s.folder = "res://assets/flare/%s/" % name
+	s.folder = folder_of(name)
 	var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(s.folder + "anims.json"))
 	s.feet_point = Vector2(meta.feet[0], meta.feet[1])
 	s.res = float(meta.get("res", 1))
 	s._sprite.scale = Vector2.ONE / s.res
-	s.sheets = {"idle": "stance", "walk": "run", "slash": "swing", "slash_heavy": "swing", "thrust": "swing",
-		"hurt": "die", "stagger": "hit", "block": "block", "block_start": "block", "jump": "run", "heal": "stance"}
+	s.sheets = PACK_SHEETS if name.begins_with("pack/") else FLARE_SHEETS
 	for a in meta.anims:
 		s.frames_of[a] = int(meta.anims[a].frames)
 		if meta.anims[a].has("rects"):

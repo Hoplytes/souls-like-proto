@@ -36,7 +36,7 @@ const NAMES := {
 }
 
 static var data := {
-	"model": "flare", "body": "male", "head": "head_short", "helm": "", "chest": "chain_cuirass",
+	"v": 2, "model": "pack_hero", "body": "male", "head": "head_short", "helm": "", "chest": "chain_cuirass",
 	"hands": "leather_gloves", "legs": "leather_pants", "feet": "leather_boots",
 	"weapon": "longsword", "shield": "shield", "tint": 0,
 }
@@ -44,7 +44,13 @@ static var data := {
 ## The list of choices for each line of the creator.
 static func options(key: String) -> Array:
 	match key:
-		"model": return ["flare", "hd_knight"] if HdSprite.available() else ["flare"]
+		"model":
+			var models := []
+			if HdSprite.pack_available():
+				models.append("pack_hero")
+			if HdSprite.available():
+				models.append("hd_knight")
+			return models + ["flare"]
 		"body": return BODIES
 		"head": return HEADS[data.body]
 		"helm": return HELMS
@@ -59,7 +65,11 @@ static func options(key: String) -> Array:
 
 static func label(key: String, value) -> String:
 	match key:
-		"model": return "Chevalier HD (SmallScaleInt)" if value == "hd_knight" else "Personnalisé"
+		"model":
+			match value:
+				"pack_hero": return "Combattant au bouclier rond"
+				"hd_knight": return "Chevalier HD"
+			return "Personnalisé (Flare)"
 		"weapon": return Weapons.DATA[value].name
 		"tint": return TINTS[value][0]
 		"shield":
@@ -88,9 +98,12 @@ static func load_saved() -> void:
 		for k in d:
 			if data.has(k):
 				data[k] = d[k]
+		if int(d.get("v", 1)) < 2:  # saved before the fantasy pack: its hero becomes the default
+			data.model = "pack_hero"
+			data.v = 2
 	data.tint = int(data.tint)
 	for k in ["body", "head", "helm", "chest", "hands", "legs", "feet", "weapon", "shield"]:
 		if not options(k).has(data[k]):
 			data[k] = options(k)[0]
 	if not options("model").has(data.model):
-		data.model = "flare"
+		data.model = options("model")[0]

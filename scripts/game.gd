@@ -18,25 +18,46 @@ const HALL_AT := Vector2(140, 0)  # ...placed apart from the world
 static var spawn_place := "prairie"
 static var defeated := {}
 
-const BIOMES := {
-	"prairie": {"name": "Plaine de l'Aube", "tiles": "grass", "music": "overworld_theme",
+## Two looks for the same world: the fantasy pack of SmallScaleInt
+## (licensed, res://local/fantasy/, see tools/convert_fantasy.py) when it is
+## there, Flare's tiles otherwise. The biome keys stay the same (prairie to the
+## south, ruins west, "snow" east, "caves" north); names, music and scenery
+## come from the look.
+static var fantasy := false
+## Camera distance chosen in the pause menu (kept across reloads).
+static var zoom_choice := 0
+const ZOOM_NAMES := ["éloignée", "moyenne", "proche"]
+static var BIOMES := {}
+static var PLACES := {}
+
+const FLARE_BIOMES := {
+	"prairie": {"name": "Plaine de l'Aube", "music": "overworld_theme",
 		"ambience": "environment/bird_twitter_loop", "light": Color(0.8, 0.78, 0.72), "torch": 0.35},
-	"ruins": {"name": "Ruines d'Hélos", "tiles": "ruins", "music": "unrest_theme",
+	"ruins": {"name": "Ruines d'Hélos", "music": "unrest_theme",
 		"ambience": "environment/raven_loop", "light": Color(0.62, 0.6, 0.68), "torch": 0.5},
-	"snow": {"name": "Crêtes gelées", "tiles": "snow", "music": "magical_theme",
+	"snow": {"name": "Crêtes gelées", "music": "magical_theme",
 		"ambience": "environment/wind_loop", "light": Color(0.74, 0.8, 0.92), "torch": 0.35},
-	"caves": {"name": "Grottes d'ambre", "tiles": "cave", "music": "cave_theme",
+	"caves": {"name": "Grottes d'ambre", "music": "cave_theme",
 		"ambience": "environment/cave_droplets_loop", "light": Color(0.46, 0.42, 0.48), "torch": 0.8},
-	"dungeon": {"name": "Labyrinthe d'Astérion", "tiles": "dungeon", "music": "dungeon_theme",
+	"dungeon": {"name": "Labyrinthe d'Astérion", "music": "dungeon_theme",
 		"ambience": "environment/cave_wind_loop", "light": Color(0.36, 0.34, 0.44), "torch": 0.7},
 }
+const FANTASY_BIOMES := {
+	"prairie": {"name": "Plaine de l'Aube", "music": "overworld_theme",
+		"ambience": "environment/bird_twitter_loop", "light": Color(0.9, 0.88, 0.82), "torch": 0.3},
+	"ruins": {"name": "Ruines d'Hélos", "music": "magical_theme",
+		"ambience": "environment/wind_loop", "light": Color(0.86, 0.76, 0.62), "torch": 0.4},
+	"snow": {"name": "Forêt des Cimes", "music": "forest_theme",
+		"ambience": "environment/forest_owl_loop", "light": Color(0.66, 0.74, 0.7), "torch": 0.5},
+	"caves": {"name": "Terres mortes", "music": "unrest_theme",
+		"ambience": "environment/raven_loop", "light": Color(0.6, 0.52, 0.56), "torch": 0.6},
+	"dungeon": {"name": "Labyrinthe d'Astérion", "music": "dungeon_theme",
+		"ambience": "environment/cave_wind_loop", "light": Color(0.42, 0.38, 0.46), "torch": 0.7},
+}
 ## Places: bonfires (and the teleport menu). Cells are in world coordinates.
-const PLACES := {
-	"prairie": {"label": "Plaine de l'Aube (départ)", "cell": Vector2(78, 78)},
-	"ruins": {"label": "Ruines d'Hélos", "cell": Vector2(22, 60)},
-	"snow": {"label": "Crêtes gelées", "cell": Vector2(60, 24)},
-	"caves": {"label": "Grottes d'ambre", "cell": Vector2(32, 34)},
-	"dungeon": {"label": "Labyrinthe d'Astérion", "cell": HALL_AT + Vector2(18.5, 18.5)},
+const PLACE_CELLS := {
+	"prairie": Vector2(78, 78), "ruins": Vector2(22, 60), "snow": Vector2(60, 24), "caves": Vector2(32, 34),
+	"dungeon": HALL_AT + Vector2(18.5, 18.5),
 }
 ## Boss arenas: centre cell, radius in cells, where the teleport menu drops you.
 const ARENAS := {
@@ -45,35 +66,93 @@ const ARENAS := {
 	"wyvern_water": {"center": Vector2(80, 14), "radius": 5.0, "label": "Boss : Glacevive, la Wyverne",
 		"entry": Vector2(73, 21)},
 }
-const PORTAL_IN := Vector2(16, 18)  # in the caves, to the dungeon
-const PORTAL_OUT := HALL_AT + Vector2(20.5, 15.5)  # in the dungeon, back to the caves
+const PORTAL_IN := Vector2(16, 18)  # in the north, to the dungeon
+const PORTAL_OUT := HALL_AT + Vector2(20.5, 15.5)  # in the dungeon, back
 
-## Floors and scenery per biome: [first id, last id] ranges of each tileset.
-const FLOORS := {
-	"prairie": [[16, 31]], "ruins": [[24, 31], [153, 166]], "snow": [[16, 31]], "caves": [[16, 31]],
-}
-const FLOOR_PATCHES := {  # second floor, painted where a noise is high
-	"prairie": [[32, 47]], "ruins": [[105, 119]], "snow": [[32, 47]], "caves": [[48, 55]],
-}
-## [first id, last id, collision radius (0 = walk through), weight]
-const DECOR := {
-	"prairie": [[252, 255, 10, 6], [248, 251, 9, 4], [240, 243, 9, 3], [244, 247, 6, 1], [112, 127, 0, 10],
-		[128, 131, 7, 2], [132, 135, 12, 0.4], [136, 137, 9, 1], [140, 143, 8, 0.4]],
-	"ruins": [[223, 234, 12, 4], [241, 246, 12, 1.2], [186, 194, 0, 4], [312, 317, 0, 3], [291, 294, 12, 0.5],
-		[289, 290, 14, 0.3], [274, 277, 7, 0.4]],
-	"snow": [[244, 247, 7, 4], [128, 131, 7, 2], [553, 567, 0, 4], [132, 135, 12, 1], [112, 127, 0, 5],
-		[532, 534, 8, 0.25], [136, 137, 8, 1]],
-	"caves": [[144, 149, 10, 4], [150, 153, 12, 3], [132, 135, 0, 3], [162, 163, 9, 0.3]],
-}
-const DENSITY := {"prairie": 0.09, "ruins": 0.07, "snow": 0.06, "caves": 0.09}
-const ENEMIES := {
-	"prairie": [["goblin", 7], ["goblin_elite", 2]],
-	"ruins": [["skeleton", 4], ["skeleton_weak", 3], ["zombie", 2]],
-	"snow": [["ice_ant", 7]],
-	"caves": [["antlion", 3], ["fire_ant", 4]],
-}
-const DUNGEON_FLOOR_PLAIN := [16, 17, 18, 19, 22, 23, 26, 29, 30, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47]
-const DUNGEON_FLOOR_COBBLE := [32, 33, 34, 35]
+static func _ids(from: int, to: int) -> Array:
+	var out := []
+	for k in range(from, to + 1):
+		out.append(str(k))
+	return out
+
+## The four turns of the pack's tiles ("Tree A1" -> "Tree A1_N", ..._E, _S, _W).
+static func _turns(names: Array) -> Array:
+	var out := []
+	for n in names:
+		for t in ["_N", "_E", "_S", "_W"]:
+			out.append(n + t)
+	return out
+
+static func _series(prefix: String, from: int, to: int, suffix := "") -> Array:
+	var out := []
+	for k in range(from, to + 1):
+		out.append("%s%d%s" % [prefix, k, suffix])
+	return out
+
+## Per biome: tileset, floors, floor patches (where a noise is high), ground
+## overlays (flat, walked over), scenery [names, collision radius (0 = walk
+## through), weight], scenery density, and the enemies [type, count].
+func _theme_flare() -> Dictionary:
+	return {
+		"tilesets": {"grass": "res://assets/flare/tiles/grass/", "ruins": "res://assets/flare/tiles/ruins/",
+			"snow": "res://assets/flare/tiles/snow/", "cave": "res://assets/flare/tiles/cave/",
+			"dungeon": "res://assets/flare/tiles/dungeon/"},
+		"zoom": 1.0,
+		"prairie": {"set": "grass", "floors": _ids(16, 31), "patches": _ids(32, 47), "overlays": [], "density": 0.09,
+			"decor": [[_ids(252, 255), 10, 6], [_ids(248, 251), 9, 4], [_ids(240, 243), 9, 3], [_ids(244, 247), 6, 1],
+				[_ids(112, 127), 0, 10], [_ids(128, 131), 7, 2], [_ids(132, 135), 12, 0.4], [_ids(136, 137), 9, 1],
+				[_ids(140, 143), 8, 0.4]],
+			"enemies": [["goblin", 7], ["goblin_elite", 2]]},
+		"ruins": {"set": "ruins", "floors": _ids(24, 31) + _ids(153, 166), "patches": _ids(105, 119), "overlays": [],
+			"density": 0.07,
+			"decor": [[_ids(223, 234), 12, 4], [_ids(241, 246), 12, 1.2], [_ids(186, 194), 0, 4], [_ids(312, 317), 0, 3],
+				[_ids(291, 294), 12, 0.5], [_ids(289, 290), 14, 0.3], [_ids(274, 277), 7, 0.4]],
+			"enemies": [["skeleton", 4], ["skeleton_weak", 3], ["zombie", 2]]},
+		"snow": {"set": "snow", "floors": _ids(16, 31), "patches": _ids(32, 47), "overlays": [], "density": 0.06,
+			"decor": [[_ids(244, 247), 7, 4], [_ids(128, 131), 7, 2], [_ids(553, 567), 0, 4], [_ids(132, 135), 12, 1],
+				[_ids(112, 127), 0, 5], [_ids(532, 534), 8, 0.25], [_ids(136, 137), 8, 1]],
+			"enemies": [["ice_ant", 7]]},
+		"caves": {"set": "cave", "floors": _ids(16, 31), "patches": _ids(48, 55), "overlays": [], "density": 0.09,
+			"decor": [[_ids(144, 149), 10, 4], [_ids(150, 153), 12, 3], [_ids(132, 135), 0, 3], [_ids(162, 163), 9, 0.3]],
+			"enemies": [["antlion", 3], ["fire_ant", 4]]},
+		"dungeon": {"set": "dungeon", "floors": ["16", "17", "18", "19", "22", "23", "26", "29", "30"] + _ids(36, 47),
+			"arena": _ids(32, 35), "bones": _ids(176, 183), "enemies": [["skeleton", 3], ["zombie", 2]]},
+	}
+
+func _theme_fantasy() -> Dictionary:
+	return {
+		"tilesets": {"fantasy": "res://local/fantasy/tiles/"},
+		"zoom": 2.0 / 3.0,  # the pack's tiles at their real size (128 px wide)
+		"prairie": {"set": "fantasy", "floors": _turns(["Ground A2"]), "patches": _turns(["Ground A18"]),
+			"overlays": _turns(_series("Ground A", 6, 12) + ["Ground A22", "Ground A23", "Ground A24"])
+				+ _turns(_series("Flora A", 1, 7)), "density": 0.075,
+			"decor": [[_turns(["Tree A1", "Tree A2", "Tree A3"]), 9, 6], [_turns(["Tree B1", "Tree B2", "Tree B3"]), 7, 2],
+				[_turns(["Tree D1", "Tree D2"]), 8, 1], [_turns(["Stone A1", "Stone A2", "Stone A3"]), 8, 1.2],
+				[_turns(_series("Flora B", 1, 6)), 0, 3], [["Misc A3_S", "Misc A4_S", "Misc B3_S", "Misc E2_S",
+				"Misc E3_S", "Misc E4_S", "Misc B6_S"], 10, 0.5]],
+			"enemies": [["pack/brigand_a", 4], ["pack/brigand_b", 3], ["pack/brigand_c", 3]]},
+		"ruins": {"set": "fantasy", "floors": _turns(["Ground J1"]), "patches": _turns(["Ground H1", "Ground H4", "Ground H9"]),
+			"overlays": _turns(_series("Ground J", 5, 8) + _series("Ground E", 2, 9)), "density": 0.07,
+			"decor": [[_turns(["Tree C1"]), 9, 5], [_turns(["Tree E1", "Tree E3"]), 7, 1.5],
+				[_turns(["Stone A13", "Stone A14", "Stone A15", "Stone A4", "Stone A5"]), 8, 1.5],
+				[_turns(["Wall A6", "Wall A19", "Wall A20"]), 9, 1.5], [_turns(["Wall A8", "Wall A9", "Wall A17"]), 9, 1],
+				[["Misc C1_S", "Misc C5_S", "Misc C6_S", "Misc C7_S"], 9, 0.6],
+				[["Misc E5_S", "Misc E6_S", "Misc E7_S", "Misc E9_S"], 0, 1.5]],
+			"enemies": [["pack/skeleton_a", 4], ["pack/skeleton_c", 3], ["pack/brigand_b", 2]]},
+		"snow": {"set": "fantasy", "floors": _turns(["Ground A18"]), "patches": _turns(["Ground A2"]),
+			"overlays": _turns(["Ground A20", "Ground A21", "Ground A10", "Ground A11"]), "density": 0.1,
+			"decor": [[_turns(["Tree D1", "Tree D2", "Tree D3"]), 9, 8], [_turns(["Stone A1", "Stone A2", "Stone A10"]), 9, 2],
+				[_turns(["Tree A4"]), 5, 0.6], [_turns(["Stone A16"]), 7, 0.25], [_turns(_series("Flora B", 1, 6)), 0, 2]],
+			"enemies": [["pack/skeleton_a", 3], ["pack/brigand_a", 3], ["pack/skeleton_c", 2]]},
+		"caves": {"set": "fantasy", "floors": _turns(["Ground C3", "Ground I9"]), "patches": _turns(["Ground B1", "Ground B4"]),
+			"overlays": _turns(_series("Ground E", 10, 15)), "density": 0.08,
+			"decor": [[_turns(["Tree E1", "Tree E3"]), 7, 5], [_turns(["Tree E2", "Tree E4", "Tree E5"]), 8, 2],
+				[_turns(["Stone A17", "Stone A18", "Stone A19"]), 9, 2], [_turns(["Stone A21", "Stone A22"]), 7, 0.6],
+				[_turns(["Stone A8"]), 12, 0.15], [["Misc C12_S", "Misc C13_S"], 8, 0.3]],
+			"enemies": [["pack/skeleton_b", 4], ["pack/skeleton_a", 3]]},
+		"dungeon": {"set": "fantasy", "floors": _turns(["Ground D1"]), "arena": _turns(["Ground H10", "Ground H11"]),
+			"bones": [], "enemies": [["pack/skeleton_c", 3], ["pack/skeleton_b", 2]]},
+	}
 
 var world: Node2D
 var player: Player
@@ -85,6 +164,7 @@ var _floor: TileMapLayer
 var _sources := {}  # "tileset:id" -> TileSet source id
 var _anchors := {}  # tileset -> its tiles.json (atlas rects and anchors)
 var _pages := {}  # tileset -> atlas textures
+var theme: Dictionary
 var _noise := FastNoiseLite.new()
 var _rng := RandomNumberGenerator.new()
 var _bonfires := {}  # place -> Bonfire
@@ -104,9 +184,13 @@ var _menu_guard := 0  # physics frame until which Esc/Tab cannot reopen a menu
 ## The map (one pixel per cell, coloured by biome; scenery darker), for the map screen.
 var map_image := Image.create(W, W, false, Image.FORMAT_RGBA8)
 var hall_image := Image.create(HALL, HALL, false, Image.FORMAT_RGBA8)
-const MAP_COLORS := {
+var MAP_COLORS := {
 	"prairie": Color(0.36, 0.46, 0.2), "ruins": Color(0.45, 0.43, 0.38), "snow": Color(0.84, 0.87, 0.92),
 	"caves": Color(0.36, 0.27, 0.19), "dungeon": Color(0.25, 0.23, 0.26),
+}
+const FANTASY_MAP_COLORS := {
+	"prairie": Color(0.38, 0.5, 0.2), "ruins": Color(0.62, 0.52, 0.24), "snow": Color(0.18, 0.32, 0.2),
+	"caves": Color(0.3, 0.22, 0.16), "dungeon": Color(0.3, 0.29, 0.3),
 }
 
 # The old single-level names, used by the test scripts.
@@ -129,11 +213,21 @@ func _ready() -> void:
 	_rng.seed = 11
 	_noise.seed = 4
 	_noise.frequency = 0.02
-	for t in ["grass", "ruins", "snow", "cave", "dungeon"]:
-		_anchors[t] = JSON.parse_string(FileAccess.get_file_as_string("res://assets/flare/tiles/%s/tiles.json" % t))
+	fantasy = ResourceLoader.exists("res://local/fantasy/tiles/atlas_0.png")
+	theme = _theme_fantasy() if fantasy else _theme_flare()
+	BIOMES = FANTASY_BIOMES if fantasy else FLARE_BIOMES
+	if fantasy:
+		MAP_COLORS = FANTASY_MAP_COLORS.duplicate()
+	PLACES = {}
+	for place in PLACE_CELLS:
+		PLACES[place] = {"label": BIOMES[place].name + (" (départ)" if place == "prairie" else ""),
+			"cell": PLACE_CELLS[place]}
+	for t in theme.tilesets:
+		var dir: String = theme.tilesets[t]
+		_anchors[t] = JSON.parse_string(FileAccess.get_file_as_string(dir + "tiles.json"))
 		var pages := []
 		for k in 4:
-			var path := "res://assets/flare/tiles/%s/atlas_%d.png" % [t, k]
+			var path := dir + "atlas_%d.png" % k
 			if not ResourceLoader.exists(path):
 				break
 			pages.append(load(path))
@@ -155,10 +249,15 @@ func _ready() -> void:
 		var b := Bonfire.new()
 		b.position = cell_of(PLACES[place].cell)
 		world.add_child(b)
-		var wood := _tile("grass", 102, Vector2(0, 2), b)
-		wood.show_behind_parent = true
-		var fire := _tile("dungeon", 167, Vector2(0, -2), b)  # the brazier's flames
-		fire.scale *= 0.8
+		if fantasy:
+			var wood := _tile("fantasy", "FirePlace", Vector2.ZERO, b)
+			wood.show_behind_parent = true
+			_fx("flame", Vector2(0, -4), b).scale *= 1.4
+		else:
+			var wood := _tile("grass", 102, Vector2(0, 2), b)
+			wood.show_behind_parent = true
+			var fire := _tile("dungeon", 167, Vector2(0, -2), b)  # the brazier's flames
+			fire.scale *= 0.8
 		var glow := PointLight2D.new()
 		glow.texture = _light_texture()
 		glow.color = Color(1.0, 0.65, 0.3)
@@ -177,6 +276,7 @@ func _ready() -> void:
 	cam.position = Vector2(0, -20)
 	cam.position_smoothing_enabled = true
 	cam.position_smoothing_speed = 7.0
+	cam.zoom = Vector2.ONE * _zoom()
 	player.add_child(cam)
 	Fx.camera = cam
 	player.died.connect(_on_player_died)
@@ -222,9 +322,9 @@ func _ready() -> void:
 static var _ambience_cache := {}
 
 func _preload() -> void:
-	var models := {"skeleton": true, "zombie": true}
-	for b in ENEMIES:
-		for e in ENEMIES[b]:
+	var models := {}
+	for b in ["prairie", "ruins", "snow", "caves", "dungeon"]:
+		for e in theme[b].enemies:
 			models[e[0]] = true
 	for m in ARENAS:
 		models[m] = true
@@ -245,7 +345,7 @@ func _ambience_stream(name: String) -> AudioStreamOggVorbis:
 
 # --- tiles -----------------------------------------------------------------
 
-func _tile(tileset: String, id: int, at: Vector2, parent: Node, z: int = 0) -> Sprite2D:
+func _tile(tileset: String, id: Variant, at: Vector2, parent: Node, z: int = 0) -> Sprite2D:
 	# All the tiles of a tileset share one atlas: the renderer can batch them.
 	var s := Sprite2D.new()
 	var a: Array = _anchors[tileset].tiles[str(id)]  # [page, x, y, w, h, ax, ay]
@@ -261,7 +361,7 @@ func _tile(tileset: String, id: int, at: Vector2, parent: Node, z: int = 0) -> S
 	return s
 
 ## A solid piece of scenery: a tile plus a small collision at its base.
-func _solid(tileset: String, id: int, at: Vector2, radius: float) -> StaticBody2D:
+func _solid(tileset: String, id: Variant, at: Vector2, radius: float) -> StaticBody2D:
 	var b := StaticBody2D.new()
 	b.position = at
 	b.collision_layer = 1
@@ -279,13 +379,13 @@ func _build_floor_layer() -> void:
 	var ts := TileSet.new()
 	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
 	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_DOWN
-	var res := float(_anchors.grass.res)  # tiles are stored at res x their size
+	var res := float(_anchors.values()[0].res)  # tiles are stored at res x their size
 	ts.tile_size = Vector2i(int(TW * res), int(TH * res))
 	# One atlas source per tileset: the floor tiles on a grid (floors.png).
 	for tileset in _anchors:
 		var meta: Dictionary = _anchors[tileset]
 		var src := TileSetAtlasSource.new()
-		src.texture = load("res://assets/flare/tiles/%s/floors.png" % tileset)
+		src.texture = load(theme.tilesets[tileset] + "floors.png")
 		src.texture_region_size = Vector2i(int(meta.floor_cell[0]), int(meta.floor_cell[1]))
 		var sid := ts.add_source(src)
 		var cols := int(meta.floor_cols)
@@ -301,13 +401,12 @@ func _build_floor_layer() -> void:
 	add_child(_floor)
 	_floor.position = cell_pos(0.5, 0.5) - _floor.map_to_local(Vector2i.ZERO) / res
 
-func _set_floor(i: int, j: int, tileset: String, id: int) -> void:
-	var src: Array = _sources["%s:%d" % [tileset, id]]
+func _set_floor(i: int, j: int, tileset: String, id: Variant) -> void:
+	var src: Array = _sources["%s:%s" % [tileset, str(id)]]
 	_floor.set_cell(Vector2i(i, j), src[0], src[1])
 
-func _pick(ranges: Array) -> int:
-	var r: Array = ranges[_rng.randi() % ranges.size()]
-	return _rng.randi_range(r[0], r[1])
+func _pick(names: Array) -> String:
+	return names[_rng.randi() % names.size()]
 
 # --- the open world --------------------------------------------------------
 
@@ -340,17 +439,20 @@ func _build_world() -> void:
 	for i in W:
 		for j in W:
 			var b := biome_at(i + 0.5, j + 0.5)
-			var tileset: String = BIOMES[b].tiles
+			var bt: Dictionary = theme[b]
+			var tileset: String = bt.set
 			var patch := _noise.get_noise_2d(i * 7.0 + 900.0, j * 7.0) > 0.3
-			_set_floor(i, j, tileset, _pick(FLOOR_PATCHES[b] if patch else FLOORS[b]))
+			_set_floor(i, j, tileset, _pick(bt.patches if patch else bt.floors))
 			var col: Color = MAP_COLORS[b]
 			map_image.set_pixel(i, j, col.darkened(0.12) if patch else col)
 			var c := Vector2i(i, j)
 			var edge := i < 3 or j < 3 or i >= W - 3 or j >= W - 3
 			if _blocked.has(c):
 				continue
+			if not bt.overlays.is_empty() and _rng.randf() < 0.22:  # grass tufts, pebbles...
+				_tile(tileset, _pick(bt.overlays), cell_of(Vector2(i + 0.5, j + 0.5)), _floor_decor())
 			var dense := _noise.get_noise_2d(i * 5.0 + 50.0, j * 5.0 - 70.0) > 0.25  # woods, rock fields
-			var chance: float = DENSITY[b] * (2.5 if dense else 1.0)
+			var chance: float = bt.density * (2.5 if dense else 1.0)
 			if edge:
 				chance = 0.75
 			if _rng.randf() < chance:
@@ -363,8 +465,13 @@ func _build_world() -> void:
 	for seg in [[top, left], [top, right], [left, bottom], [right, bottom]]:
 		_edge(seg[0], seg[1])
 	# A summoning circle marks the wyvern's arena and the dungeon portal.
-	_tile("snow", 264, cell_of(ARENAS.wyvern_water.center), _floor_decor(), 1)
-	_tile("cave", 265, cell_of(PORTAL_IN), _floor_decor(), 1)
+	if fantasy:
+		for k in 10:
+			var c: Vector2 = ARENAS.wyvern_water.center + Vector2.RIGHT.rotated(k * TAU / 10.0) * (ARENAS.wyvern_water.radius + 0.6)
+			_solid("fantasy", "Stone A14_S" if k % 2 == 0 else "Stone A15_S", cell_of(c), 9)
+	else:
+		_tile("snow", 264, cell_of(ARENAS.wyvern_water.center), _floor_decor(), 1)
+		_tile("cave", 265, cell_of(PORTAL_IN), _floor_decor(), 1)
 
 var _floor_decor_node: Node2D
 
@@ -376,20 +483,20 @@ func _floor_decor() -> Node2D:
 	return _floor_decor_node
 
 func _decor(b: String, tileset: String, c: Vector2, solid_only: bool) -> void:
-	var table: Array = DECOR[b]
+	var table: Array = theme[b].decor
 	var total := 0.0
 	for e in table:
-		if not solid_only or e[2] > 0:
-			total += e[3]
+		if not solid_only or e[1] > 0:
+			total += e[2]
 	var roll := _rng.randf() * total
 	for e in table:
-		if solid_only and e[2] == 0:
+		if solid_only and e[1] == 0:
 			continue
-		roll -= e[3]
+		roll -= e[2]
 		if roll <= 0.0:
-			var id := _rng.randi_range(e[0], e[1])
-			if e[2] > 0:
-				_solid(tileset, id, cell_of(c), e[2])
+			var id := _pick(e[0])
+			if e[1] > 0:
+				_solid(tileset, id, cell_of(c), e[1])
 				var px := Vector2i(clampi(int(c.x), 0, W - 1), clampi(int(c.y), 0, W - 1))
 				map_image.set_pixelv(px, map_image.get_pixelv(px).darkened(0.45))
 			else:
@@ -413,54 +520,76 @@ func _hall(i: float, j: float) -> Vector2:
 	return cell_of(HALL_AT + Vector2(i, j))
 
 func _build_dungeon() -> void:
+	var d: Dictionary = theme.dungeon
+	var set: String = d.set
 	var arena_c: Vector2 = ARENAS.minotaur.center - HALL_AT
 	for i in HALL:
 		for j in HALL:
 			var cobble := Vector2(i + 0.5, j + 0.5).distance_to(arena_c) < ARENAS.minotaur.radius + 0.6
-			var ids: Array = DUNGEON_FLOOR_COBBLE if cobble else DUNGEON_FLOOR_PLAIN
-			_set_floor(int(HALL_AT.x) + i, int(HALL_AT.y) + j, "dungeon", ids[_rng.randi() % ids.size()])
+			_set_floor(int(HALL_AT.x) + i, int(HALL_AT.y) + j, set, _pick(d.arena if cobble else d.floors))
 			hall_image.set_pixel(i, j, MAP_COLORS.dungeon.lightened(0.15) if cobble else MAP_COLORS.dungeon)
-	_tile("dungeon", 265, _hall(arena_c.x, arena_c.y), _floor_decor(), 1)
-	for k in 4:
-		var a := k * TAU / 4.0 + PI / 4.0
-		var c := arena_c + Vector2.RIGHT.rotated(a) * 2.6
-		_tile("dungeon", 60 + k, _hall(c.x, c.y), _floor_decor(), 1)
 	var top := _hall(0, 0)
 	var left := _hall(0, HALL)
 	var right := _hall(HALL, 0)
 	var bottom := _hall(HALL, HALL)
 	for seg in [[top, left], [top, right], [left, bottom], [right, bottom]]:
 		_edge(seg[0], seg[1])
-	# Back walls: the upper-left edge shows its right face, the upper-right
-	# edge its left face (the Flare tiles come in left/right pairs).
-	for k in range(-1, HALL):
-		if k == -1:
-			_tile("dungeon", 66, _hall(-0.5, -0.5), world)
-			continue
-		_tile("dungeon", [65, 69, 103, 97, 99, 65, 107, 69][posmod(k, 8)], _hall(-0.5, k + 0.5), world)
-		_tile("dungeon", [64, 68, 102, 96, 98, 64, 106, 68][posmod(k + 3, 8)], _hall(k + 0.5, -0.5), world)
+	var pillar := "111"
+	var statues := ["128", "129", "130", "131"]
+	var tombs := ["194", "199", "200"]
+	if fantasy:
+		pillar = "Wall A19_S"
+		statues = ["Misc C5_S", "Misc C6_S", "Misc C1_S", "Stone A14_S"]
+		tombs = ["Misc C9_S", "Misc C9_S", "Misc C9_S"]
+		# Back walls: heavy stone blocks along the two far edges.
+		for k in range(-1, HALL):
+			_tile(set, "Wall A16_S", _hall(-0.5, k + 0.5), world)
+			if k >= 0:
+				_tile(set, "Wall A16_S", _hall(k + 0.5, -0.5), world)
+	else:
+		_tile(set, 265, _hall(arena_c.x, arena_c.y), _floor_decor(), 1)
+		for k in 4:
+			var a := k * TAU / 4.0 + PI / 4.0
+			var c := arena_c + Vector2.RIGHT.rotated(a) * 2.6
+			_tile(set, 60 + k, _hall(c.x, c.y), _floor_decor(), 1)
+		# Back walls: the upper-left edge shows its right face, the upper-right
+		# edge its left face (the Flare tiles come in left/right pairs).
+		for k in range(-1, HALL):
+			if k == -1:
+				_tile(set, 66, _hall(-0.5, -0.5), world)
+				continue
+			_tile(set, [65, 69, 103, 97, 99, 65, 107, 69][posmod(k, 8)], _hall(-0.5, k + 0.5), world)
+			_tile(set, [64, 68, 102, 96, 98, 64, 106, 68][posmod(k + 3, 8)], _hall(k + 0.5, -0.5), world)
 	for k in 10:
 		var a := k * TAU / 10.0
 		var c := arena_c + Vector2.RIGHT.rotated(a) * (ARENAS.minotaur.radius + 0.9)
 		if absf(wrapf(a - PI / 4.0, -PI, PI)) < 0.5 or c.x < 0.6 or c.y < 0.6:
 			continue
-		_solid("dungeon", 111, _hall(c.x, c.y), 12)
-	for spot in [[128, Vector2(1.2, 14)], [129, Vector2(14, 1.2)], [130, Vector2(1.2, 18)], [131, Vector2(18, 1.2)]]:
-		_solid("dungeon", spot[0], _hall(spot[1].x, spot[1].y), 16)
-	for spot in [[194, Vector2(15, 15)], [199, Vector2(9.5, 16.5)], [200, Vector2(17, 9)]]:
-		_solid("dungeon", spot[0], _hall(spot[1].x, spot[1].y), 22)
+		_solid(set, pillar, _hall(c.x, c.y), 12)
+	var spots := [Vector2(1.2, 14), Vector2(14, 1.2), Vector2(1.2, 18), Vector2(18, 1.2)]
+	for k in 4:
+		_solid(set, statues[k], _hall(spots[k].x, spots[k].y), 16)
+	var tomb_spots := [Vector2(15, 15), Vector2(9.5, 16.5), Vector2(17, 9)]
+	for k in 3:
+		_solid(set, tombs[k], _hall(tomb_spots[k].x, tomb_spots[k].y), 22 if not fantasy else 14)
 	for c in [Vector2(17, 20), Vector2(20, 17), Vector2(14, 9), Vector2(3, 10), Vector2(10, 3)]:
 		_brazier(_hall(c.x, c.y))
-	for k in 26:
-		var c := Vector2(_rng.randf_range(1, HALL - 1), _rng.randf_range(1, HALL - 1))
-		if c.distance_to(Vector2(18.5, 18.5)) < 2.5:
-			continue
-		_tile("dungeon", 176 + _rng.randi() % 8, _hall(c.x, c.y), world).z_index = -5
+	if not d.bones.is_empty():
+		for k in 26:
+			var c := Vector2(_rng.randf_range(1, HALL - 1), _rng.randf_range(1, HALL - 1))
+			if c.distance_to(Vector2(18.5, 18.5)) < 2.5:
+				continue
+			_tile(set, _pick(d.bones), _hall(c.x, c.y), world).z_index = -5
 
 func _brazier(at: Vector2) -> void:
-	var b := _solid("dungeon", 151, at, 10)
-	var fire := _tile("dungeon", 167, Vector2(0, -14), b)
-	fire.z_index = 1
+	var b: StaticBody2D
+	if fantasy:
+		b = _solid("fantasy", "Misc C8_S", at, 10)
+		_fx("flame", Vector2(0, -22), b).z_index = 1
+	else:
+		b = _solid("dungeon", 151, at, 10)
+		var fire := _tile("dungeon", 167, Vector2(0, -14), b)
+		fire.z_index = 1
 	var light := PointLight2D.new()
 	light.texture = _light_texture()
 	light.color = Color(1.0, 0.6, 0.3)
@@ -468,6 +597,35 @@ func _brazier(at: Vector2) -> void:
 	light.texture_scale = 1.4
 	light.position = Vector2(0, -20)
 	b.add_child(light)
+
+## An animated prop of the pack (fire, torch, portal), looping.
+var _fx_meta := {}
+var _fx_frames := {}
+
+func _fx(name: String, at: Vector2, parent: Node) -> AnimatedSprite2D:
+	if _fx_meta.is_empty():
+		_fx_meta = JSON.parse_string(FileAccess.get_file_as_string("res://local/fantasy/fx/fx.json"))
+	var m: Dictionary = _fx_meta[name]
+	if not _fx_frames.has(name):
+		var strip: Texture2D = load("res://local/fantasy/fx/%s.png" % name)
+		var sf := SpriteFrames.new()
+		sf.set_animation_speed("default", 14.0)
+		for k in int(m.frames):
+			var at_tex := AtlasTexture.new()
+			at_tex.atlas = strip
+			at_tex.region = Rect2(k * m.w, 0, m.w, m.h)
+			sf.add_frame("default", at_tex)
+		_fx_frames[name] = sf
+	var s := AnimatedSprite2D.new()
+	s.sprite_frames = _fx_frames[name]
+	s.centered = false
+	s.offset = -Vector2(m.ax, m.ay)
+	s.scale = Vector2.ONE / float(_anchors.fantasy.res)
+	s.position = at
+	s.play()
+	s.frame = randi() % int(m.frames)
+	parent.add_child(s)
+	return s
 
 func _light_texture() -> GradientTexture2D:
 	var g := GradientTexture2D.new()
@@ -494,6 +652,10 @@ func _make_portal(at: Vector2, to: Vector2, label: String) -> void:
 	cs.shape = c
 	a.add_child(cs)
 	add_child(a)
+	if fantasy:
+		var ring := _tile("fantasy", "Misc C14_S", Vector2.ZERO, world)
+		ring.position = a.position + Vector2(0, -2)
+		_fx("portal", a.position + Vector2(0, -1), world)
 	var glow := PointLight2D.new()
 	glow.texture = _light_texture()
 	glow.color = Color(0.5, 0.6, 1.0)
@@ -543,8 +705,8 @@ func _spawn_enemies() -> void:
 	_enemies.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 77
-	for b in ENEMIES:
-		for entry in ENEMIES[b]:
+	for b in ["prairie", "ruins", "snow", "caves"]:
+		for entry in theme[b].enemies:
 			var placed := 0
 			var tries := 0
 			while placed < entry[1] and tries < 500:
@@ -556,9 +718,13 @@ func _spawn_enemies() -> void:
 					continue
 				_add_enemy(entry[0], c)
 				placed += 1
-	for spot in [[Vector2(14, 16), "skeleton"], [Vector2(16, 12.5), "skeleton"], [Vector2(11, 14), "zombie"],
-			[Vector2(13, 10.5), "skeleton"], [Vector2(10, 11), "zombie"]]:
-		_add_enemy(spot[1], HALL_AT + spot[0])
+	var guards := []
+	for e in theme.dungeon.enemies:
+		for k in e[1]:
+			guards.append(e[0])
+	var spots := [Vector2(14, 16), Vector2(16, 12.5), Vector2(11, 14), Vector2(13, 10.5), Vector2(10, 11)]
+	for k in mini(guards.size(), spots.size()):
+		_add_enemy(guards[k], HALL_AT + spots[k])
 
 func _add_enemy(model: String, c: Vector2) -> void:
 	var s := SkeletonEnemy.new()
@@ -768,6 +934,10 @@ func _close_menu() -> void:
 	if _menu:
 		_menu.close()
 
+## The camera zoom: far = the theme's (the pack's tiles at their real size).
+func _zoom() -> float:
+	return [float(theme.zoom), 1.0, 1.3][zoom_choice]
+
 ## Esc / Start: the pause menu.
 func open_pause_menu() -> void:
 	var muted := AudioServer.is_bus_mute(0)
@@ -780,6 +950,10 @@ func open_pause_menu() -> void:
 			open_pause_menu()],
 		["Son : " + ("coupé" if muted else "activé"), func():
 			AudioServer.set_bus_mute(0, not muted)
+			open_pause_menu()],
+		["Caméra : " + ZOOM_NAMES[zoom_choice], func():
+			zoom_choice = (zoom_choice + 1) % ZOOM_NAMES.size()
+			cam.zoom = Vector2.ONE * _zoom()
 			open_pause_menu()],
 		["Bruitages : " + Sfx.sounds_label(), func():
 			Sfx.toggle_set(self)

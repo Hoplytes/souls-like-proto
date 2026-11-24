@@ -11,7 +11,8 @@ Flare est stocké à sa pleine résolution (`RES = 2` dans `tools/convert_flare.
 - **Créateur de personnage** au lancement : homme ou femme, tête, coiffe, torse, mains, jambes, pieds,
   arme (13 armes, 5 styles de combat), bouclier et teinte d'armure. Le héros est sauvegardé.
   Le créateur est aussi accessible depuis le **menu pause** (Échap).
-- Un **monde ouvert** de 96 × 96 cases en quatre biomes, chacun avec sa musique, son ambiance sonore, sa lumière,
+- Un **monde ouvert** de 96 × 96 cases en quatre biomes, dessiné avec le pack payant *Fantasy tileset - 2D
+  Isometric* de SmallScaleInt (dépôt privé) ou, à défaut, avec les tuiles de Flare, chacun avec sa musique, son ambiance sonore, sa lumière,
   ses ennemis et son **feu de camp** (se reposer remet la santé et les fioles, fait revenir les ennemis et devient
   le point de réapparition) :
   - **Plaine de l'Aube** (sud, départ) : forêts, gobelins ;
@@ -75,6 +76,11 @@ Flare est stocké à sa pleine résolution (`RES = 2` dans `tools/convert_flare.
 | `tools/showcase.gd` | Filme les mouvements du héros (`godot -- --showcase=<dossier>`) |
 
 ## Graphismes
+
+**Pack payant** : le décor (*Fantasy tileset - 2D Isometric* de SmallScaleInt), le héros par défaut, les
+squelettes et les brigands viennent du dépôt **privé** `Hoplytes/souls-like-assets` (dossier `local/fantasy/`),
+converti par `python3 tools/convert_fantasy.py <zip du pack>`. Sans ce dossier, le jeu reprend le décor et les
+ennemis de Flare.
 
 Héros, ennemis et tuiles des biomes viennent de [Flare](https://github.com/flareteam/flare-game) (CC-BY-SA 3.0), des rendus
 3D en 8 directions, convertis par :

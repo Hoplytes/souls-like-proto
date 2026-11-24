@@ -64,6 +64,9 @@ var _guard_flash := 0.0
 var _step_t := 0.0
 ## True when the HD knight (licensed art in res://local/) is the chosen model.
 var hd := false
+## True for the hero of the fantasy pack (licensed): also an "hd" model, with
+## three different swings, strafing steps and a backward run.
+var pack := false
 var _roll_class := "medium"
 ## Lock-on (Souls): the hero keeps facing the locked enemy and strafes around it.
 const LOCK_RANGE := 230.0  # px to pick a target
@@ -73,14 +76,20 @@ var _lock_marker: LockMarker
 var _stick_flicked := false
 
 func make_sprite():
+	if pack:
+		return HdSprite.flare("pack/hero")
 	if hd:
-		return HdSprite.new()
+		var k := HdSprite.new()
+		if Game.fantasy:  # same artist as the pack: same scale as its characters
+			k.set_res(128.0 / 96.0)
+		return k
 	var a := AvatarSprite.new()
 	a.build(HeroConfig.data)
 	return a
 
 func _ready() -> void:
-	hd = HeroConfig.data.model == "hd_knight" and HdSprite.available()
+	pack = HeroConfig.data.model == "pack_hero" and HdSprite.pack_available()
+	hd = pack or (HeroConfig.data.model == "hd_knight" and HdSprite.available())
 	weapon = "longsword" if hd else HeroConfig.data.weapon
 	if hd:
 		shadow_size = Vector2.ZERO  # its sheets include a shadow
@@ -189,7 +198,7 @@ func _free(input: Vector2) -> void:
 		velocity = velocity.move_toward(Vector2.ZERO, DECEL * delta)
 	var pace := velocity.length() / SPEED
 	if pace > 0.1:
-		sprite.play("walk", WALK_ANIM * clampf(pace, 0.5, 1.0))
+		sprite.play(_move_anim(), WALK_ANIM * clampf(pace, 0.5, 1.0))
 		_step_t -= delta * pace
 		if _step_t <= 0.0:
 			_step_t = 4.5 / WALK_ANIM  # two steps per walk cycle
@@ -220,6 +229,19 @@ func _start_action(action: String, input: Vector2) -> bool:
 				sprite.play("idle", 2.0)
 				return true
 	return false
+
+## Walking, or, locked on an enemy with a model that has them, strafing
+## steps and a backward run.
+func _move_anim() -> String:
+	if lock_target == null or not (sprite is HdSprite) or not sprite.has_anim("strafe_left"):
+		return "walk"
+	var v := velocity.normalized()
+	var ahead := facing.dot(v)
+	if ahead > 0.6:
+		return "walk"
+	if ahead < -0.6:
+		return "back"
+	return "strafe_right" if facing.cross(v) > 0.0 else "strafe_left"
 
 ## Turns the hero at a limited speed (no instant about-turn).
 func _turn_toward(dir: Vector2, delta: float) -> void:
@@ -324,7 +346,10 @@ func _start_attack(kind: String, input: Vector2) -> void:
 	_atk_kind = kind
 	_spend(_atk.stamina)
 	facing = _soft_lock(input)
-	sprite.play("slash_heavy" if kind == "heavy" else "slash", 0.0, false, true)
+	var anim: String = "slash_heavy" if kind == "heavy" else ["slash", "slash2", "slash3"][clampi(_combo, 0, 2)]
+	if not (sprite is HdSprite and sprite.has_anim(anim)):
+		anim = "slash_heavy" if kind == "heavy" else "slash"
+	sprite.play(anim, 0.0, false, true)
 	state = State.ATTACK
 	_atk_phase = 0
 	_t = 0.0
