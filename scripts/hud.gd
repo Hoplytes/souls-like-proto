@@ -89,7 +89,14 @@ func _end_intro() -> void:
 		_intro_t = -1.0
 		intro_done.emit()
 
+## True when the last input came from a gamepad (the hints name its buttons).
+var pad := false
+
 func _input(e: InputEvent) -> void:
+	if e is InputEventJoypadButton or (e is InputEventJoypadMotion and absf(e.axis_value) > 0.5):
+		pad = true
+	elif e is InputEventKey or e is InputEventMouseButton:
+		pad = false
 	if _intro_t > 0.6 and e.is_pressed() and not e.is_echo() \
 			and (e is InputEventKey or e is InputEventJoypadButton or e is InputEventMouseButton):
 		get_viewport().set_input_as_handled()

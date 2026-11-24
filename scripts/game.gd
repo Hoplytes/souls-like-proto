@@ -175,7 +175,7 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--autotest=") or a.begins_with("--profile=") or a.begins_with("--showcase="):
 			testing = true
-	if testing:  # the tests start from a new game and never touch the save
+	if testing and Progress.saving:  # the tests start from a new game and never touch the save
 		Progress.saving = false
 		Progress.data = Progress.fresh()
 	else:
@@ -1393,8 +1393,13 @@ func _update_uses() -> void:
 				best_d = d
 				best = u
 				best.shown = text
-	hud.hint = "" if best.is_empty() else "[E] " + best.shown
-	if not best.is_empty() and Input.is_action_just_pressed("interact"):
+	if best.is_empty():
+		hud.hint = ""
+	elif best.shown.begins_with("!"):  # only a remark: nothing to do
+		hud.hint = best.shown.substr(1)
+	else:
+		hud.hint = "[%s] %s" % ["A" if hud.pad else "E", best.shown]
+	if not best.is_empty() and not best.shown.begins_with("!") and Input.is_action_just_pressed("interact"):
 		best.act.call()
 
 # --- bonfires ------------------------------------------------------------------
@@ -1413,11 +1418,22 @@ func _make_bonfire(place: String) -> void:
 func _bonfire_text(place: String) -> String:
 	if not _sealed.is_empty():
 		return ""
+	if _bonfires[place].lit and _enemy_hunting():
+		return "!Impossible de se reposer : des ennemis vous poursuivent"
 	return "Se reposer au feu" if _bonfires[place].lit else "Allumer le feu"
+
+## No rest while enemies are after the hero (as in the Souls).
+func _enemy_hunting() -> bool:
+	for e in _enemies:
+		if is_instance_valid(e) and not e.dead and e.state in [SkeletonEnemy.State.COMBAT, SkeletonEnemy.State.ATTACK] \
+				and e.global_position.distance_to(player.global_position) < 320.0:
+			return true
+	return false
 
 func _bonfire_act(place: String) -> void:
 	if _bonfires[place].lit:
-		_rest(place)
+		if not _enemy_hunting():
+			_rest(place)
 	else:
 		_light_bonfire(place)
 
