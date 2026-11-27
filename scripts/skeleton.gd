@@ -29,12 +29,12 @@ const TYPES := {
 		"sound": "skeleton", "style": "caster", "keep": 120.0, "moves": ["staff", "bolt", "lightning", "nova", "blast"]},
 	"pack/skeleton_c": {"name": "Squelette au bouclier", "hp": 100, "poise": 40, "run": 52.0, "sight": 140.0, "souls": 90,
 		"sound": "skeleton", "style": "guard", "guard": 70.0, "moves": ["slash", "bash", "overhead", "leap"]},
-	"pack/brigand_a": {"name": "Brigand", "hp": 60, "poise": 20, "run": 80.0, "sight": 170.0, "souls": 50,
-		"sound": "goblin", "style": "agile", "moves": ["stab", "rip", "spin", "dash", "pounce"]},
+	"pack/brigand_a": {"name": "Brigand", "hp": 60, "poise": 20, "run": 74.0, "sight": 170.0, "souls": 50,
+		"sound": "goblin", "style": "agile", "dmg": 0.9, "moves": ["stab", "rip", "spin", "dash", "pounce"]},
 	"pack/brigand_b": {"name": "Brute", "hp": 95, "poise": 45, "run": 66.0, "sight": 160.0, "souls": 70,
 		"sound": "goblin", "style": "melee", "dmg": 1.25, "moves": ["stab", "rip", "spin", "pounce"]},
-	"pack/brigand_c": {"name": "Lanceur de couteaux", "hp": 55, "poise": 20, "run": 76.0, "sight": 200.0, "souls": 55,
-		"sound": "goblin", "style": "thrower", "keep": 105.0, "moves": ["stab", "rip", "throw", "dash"]},
+	"pack/brigand_c": {"name": "Lanceur de couteaux", "hp": 55, "poise": 20, "run": 72.0, "sight": 200.0, "souls": 55,
+		"sound": "goblin", "style": "thrower", "dmg": 0.85, "keep": 105.0, "moves": ["stab", "rip", "throw", "dash"]},
 }
 ## Moves: the pack animation, its length (s), the blow's point in it (0..1),
 ## the distance range (px) it is used at, damage factor, poise damage, the
@@ -49,8 +49,8 @@ const MOVES := {
 		"kind": "circle", "size": Vector2(22, 0), "reach": 20, "lunge": 16, "next": ["cleave", 0.45]},
 	"cleave": {"anim": "Attack2", "time": 1.3, "hit": 0.46, "range": [0, 42], "dmg": 1.3, "poise": 25,
 		"kind": "circle", "size": Vector2(27, 0), "reach": 19, "lunge": 22},
-	"lunge": {"anim": "AttackRun", "time": 1.1, "hit": 0.42, "range": [55, 110], "dmg": 1.15, "poise": 18,
-		"kind": "circle", "size": Vector2(21, 0), "reach": 22, "lunge": 84, "cd": 3.0, "track": 3.0},
+	"lunge": {"anim": "AttackRun", "time": 1.25, "hit": 0.48, "range": [55, 110], "dmg": 1.1, "poise": 18,
+		"kind": "circle", "size": Vector2(21, 0), "reach": 22, "lunge": 84, "cd": 4.0, "track": 3.0},
 	"nova": {"anim": "Attack4", "time": 1.6, "hit": 0.68, "range": [0, 46], "dmg": 1.2, "poise": 30,
 		"kind": "nova", "size": Vector2(50, 0), "cd": 7.0, "weight": 0.6, "unblockable": true},
 	"blast": {"anim": "Attack5", "time": 1.4, "hit": 0.42, "range": [0, 62], "dmg": 1.1, "poise": 20,
@@ -76,13 +76,16 @@ const MOVES := {
 		"kind": "circle", "size": Vector2(22, 0), "reach": 18, "lunge": 16, "next": ["spin", 0.35]},
 	"spin": {"anim": "Attack2", "time": 1.15, "hit": 0.6, "range": [0, 40], "dmg": 1.2, "poise": 20,
 		"kind": "circle", "size": Vector2(30, 0), "reach": 8, "lunge": 12},
-	"dash": {"anim": "AttackRun", "time": 1.0, "hit": 0.42, "range": [50, 115], "dmg": 1.0, "poise": 14,
-		"kind": "rect", "size": Vector2(36, 14), "reach": 14, "lunge": 88, "cd": 2.5, "track": 3.5},
-	"pounce": {"anim": "Special1", "time": 1.35, "hit": 0.74, "range": [70, 140], "dmg": 1.35, "poise": 28,
-		"kind": "circle", "size": Vector2(26, 0), "reach": 14, "lunge": 118, "cd": 5.0, "track": 3.0},
+	"dash": {"anim": "AttackRun", "time": 1.25, "hit": 0.5, "range": [50, 115], "dmg": 0.85, "poise": 14,
+		"kind": "rect", "size": Vector2(32, 12), "reach": 14, "lunge": 84, "cd": 4.5, "track": 3.0},
+	"pounce": {"anim": "Special1", "time": 1.4, "hit": 0.74, "range": [70, 140], "dmg": 1.15, "poise": 24,
+		"kind": "circle", "size": Vector2(24, 0), "reach": 14, "lunge": 110, "cd": 6.0, "track": 3.0},
 	"throw": {"anim": "Attack3", "time": 1.0, "hit": 0.47, "range": [55, 210], "dmg": 0.8, "poise": 8,
 		"kind": "knife", "speed": 235.0, "cd": 1.4, "weight": 2.0, "next": ["throw", 0.35]},
 }
+## Lunging attacks: how long the rush lasts (it ends with the blow). The
+## enemy stops turning before it sets off, so a roll to the side dodges it.
+const LUNGE_TIME := 0.34
 const MAX_ATTACKERS := 2  # enemies hitting the hero in melee at the same time
 const LEASH := 430.0  # px from its post before it gives up
 
@@ -375,15 +378,27 @@ func _attack(to_p: Vector2, dist: float, delta: float) -> void:
 	var hit_t: float = time * float(_m.hit)
 	sprite.set_progress(_t / time)
 	velocity = Vector2.ZERO
-	# Tracking during the windup only: a late roll to the side dodges it.
-	if _t < hit_t * 0.8 and dist > 1.0:
-		_turn(to_p, float(_m.get("track", 5.0)), delta)
-	# A glint before the blow.
-	if not _struck and _t > hit_t - 0.22:
-		sprite.modulate = base_modulate().lerp(Color(1.5, 1.3, 1.25), clampf((_t - hit_t + 0.22) / 0.22, 0, 1))
 	var lunge: float = _m.get("lunge", 0.0)
-	if lunge > 0.0 and _t > hit_t - 0.24 and _t < hit_t + 0.04 and dist > 20.0:
-		velocity = facing * lunge / 0.28
+	var rush := lunge >= 40.0  # a long rush, not a step
+	var rush_from := hit_t - LUNGE_TIME + 0.04
+	# Tracking during the windup only (and never during a rush): a late roll
+	# to the side dodges it.
+	var track_until := minf(hit_t * 0.8, rush_from - 0.1) if rush else hit_t * 0.8
+	if _t < track_until and dist > 1.0:
+		_turn(to_p, float(_m.get("track", 5.0)), delta)
+	# A glint before the blow; before a rush, it comes earlier and stronger.
+	var glint_from := rush_from - 0.3 if rush else hit_t - 0.22
+	if not _struck and _t > glint_from:
+		var k := clampf((_t - glint_from) / (hit_t - glint_from), 0, 1)
+		sprite.modulate = base_modulate().lerp(Color(1.7, 1.35, 1.2) if rush else Color(1.5, 1.3, 1.25), k)
+	if rush and _t >= rush_from and _t - get_physics_process_delta_time() < rush_from:
+		Fx.dust(get_parent(), global_position, -facing)  # it sets off
+		Sfx.play(self, "roll", global_position, -6.0)
+	if lunge > 0.0:
+		var from := rush_from if rush else hit_t - 0.24
+		var span := LUNGE_TIME if rush else 0.28
+		if _t > from and _t < from + span and dist > 20.0:
+			velocity = facing * lunge / span
 	if not _struck and _t >= hit_t:
 		_struck = true
 		sprite.modulate = base_modulate()

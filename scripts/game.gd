@@ -123,7 +123,6 @@ var music: Music
 var cam: Camera2D
 var _floor: TileMapLayer
 var _water: TileMapLayer
-var _floor_top: TileMapLayer  # grass over the earth blocks of the lake's banks
 var _sources := {}  # "tileset:id" -> TileSet source id
 var _anchors := {}  # tileset -> its tiles.json (atlas rects and anchors)
 var _pages := {}  # tileset -> atlas textures
@@ -171,6 +170,7 @@ static func cell_of(v: Vector2) -> Vector2:
 
 func _ready() -> void:
 	setup_inputs()
+	process_priority = 10  # after the sprites (the hero's silhouette copies his frame)
 	var testing := false
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--autotest=") or a.begins_with("--profile=") or a.begins_with("--showcase="):
@@ -364,20 +364,14 @@ func _build_floor_layer() -> void:
 	_floor.scale = Vector2.ONE / res
 	add_child(_floor)
 	_floor.position = cell_pos(0.5, 0.5) - _floor.map_to_local(Vector2i.ZERO) / res
-	# Water lies under the ground layer: the earth blocks around it show their
-	# sides over it, like banks.
+	# Water lies under the ground layer; along the shore, the ground is cut
+	# along a curved line (shaders/shore_*.gdshader, see _shore()).
 	_water = TileMapLayer.new()
 	_water.tile_set = ts
 	_water.z_index = -11
 	_water.scale = _floor.scale
 	_water.position = _floor.position
 	add_child(_water)
-	_floor_top = TileMapLayer.new()
-	_floor_top.tile_set = ts
-	_floor_top.z_index = -10
-	_floor_top.scale = _floor.scale
-	_floor_top.position = _floor.position
-	add_child(_floor_top)
 
 func _set_floor(i: int, j: int, tileset: String, id: Variant) -> void:
 	var src: Array = _sources["%s:%s" % [tileset, str(id)]]
@@ -405,7 +399,7 @@ const CHUNK := 8
 var _chunks := {}  # Vector2i -> Node2D
 var _chunk_bodies := {}  # Vector2i -> StaticBody2D
 var _tall := {}  # Vector2i -> Array of the block's trees: faded when in front of the hero
-var _faded: Array = []
+var _fade := {}  # tall sprite -> how much it hides the hero (0..1), eased
 var _occupied := {}  # cells holding a solid prop (no enemy spawns there)
 var _field_cells := {}
 var _water_cells: Array[Vector2i] = []
@@ -515,6 +509,8 @@ func _build_world() -> void:
 				else:
 					_water_cells.append(c)
 					map_image.set_pixel(i, j, MAP_COLORS.water)
+					if _near_shore(c, walkable_water, false):
+						_set_floor(i, j, "fantasy", _pick(t.floors))  # the land may reach into it
 				continue
 			var road := int(map.road[WorldMap.idx(c)])
 			if road == 2:
@@ -528,11 +524,9 @@ func _build_world() -> void:
 				col = MAP_COLORS.field
 			else:
 				_set_floor(i, j, "fantasy", _pick(t.floors))
-			# Banks: an earth block (its side shows over the water) under the grass.
-			if road == 0 and _beside_water(c, walkable_water):
-				var top: Array = _sources["fantasy:" + _pick(t.floors)]
-				_floor_top.set_cell(c, top[0], top[1])
-				_set_floor(i, j, "fantasy", _pick(_turns(["Ground A1"])))
+			# The shore: water under the ground, where the curved line may cut it.
+			if _near_shore(c, walkable_water, true):
+				_water.set_cell(c, water_src[0], water_src[1])
 			if level_at(c) == 1:
 				col = col.lightened(0.16)
 			var d := map.forest_at(c)
@@ -563,6 +557,7 @@ func _build_world() -> void:
 	var bottom := cell_pos(W, W)
 	for seg in [[top, left], [top, right], [left, bottom], [right, bottom]]:
 		_edge(seg[0], seg[1])
+	_shore(walkable_water)
 	_build_relief()
 	_build_lake(walkable_water)
 	_build_village()
@@ -602,11 +597,45 @@ func _road_edge(c: Vector2i, region: String) -> String:
 			return set[0][k]
 	return ""
 
-func _beside_water(c: Vector2i, walkable_water: Dictionary) -> bool:
-	for n in [c + Vector2i(1, 0), c - Vector2i(1, 0), c + Vector2i(0, 1), c - Vector2i(0, 1)]:
-		if map.is_water(n) and not walkable_water.has(n):
-			return true
+## A cell by the shore: land with open water around it (want_water), or open
+## water with land around it.
+func _near_shore(c: Vector2i, walkable_water: Dictionary, want_water: bool) -> bool:
+	for di in [-1, 0, 1]:
+		for dj in [-1, 0, 1]:
+			var n := c + Vector2i(di, dj)
+			if n.x < 0 or n.y < 0 or n.x >= W or n.y >= W:
+				continue
+			var water := map.is_water(n) or walkable_water.has(n)
+			if want_water and water and not walkable_water.has(n):
+				return true
+			if not want_water and not water:
+				return true
 	return false
+
+## The curved shore: the land / water grid, smoothly upscaled, tells the
+## shaders of the ground and of the water where the water's edge runs (wet
+## earth, shallows, foam), instead of the cells' straight edges.
+func _shore(walkable_water: Dictionary) -> void:
+	var mask := Image.create(W, W, false, Image.FORMAT_L8)
+	var flags := Image.create(W, W, false, Image.FORMAT_L8)
+	for i in W:
+		for j in W:
+			var c := Vector2i(i, j)
+			var planks := walkable_water.has(c)
+			# Planks count as land: the water laps against the pier and the bridges.
+			mask.set_pixel(i, j, Color.BLACK if map.is_water(c) and not planks else Color.WHITE)
+			flags.set_pixel(i, j, Color.BLACK if planks else Color.WHITE)
+	mask.resize(W * 4, W * 4, Image.INTERPOLATE_CUBIC)
+	var mask_tex := ImageTexture.create_from_image(mask)
+	var flags_tex := ImageTexture.create_from_image(flags)
+	for layer in [[_floor, "res://shaders/shore_ground.gdshader"], [_overlay, "res://shaders/shore_ground.gdshader"],
+			[_water, "res://shaders/shore_water.gdshader"]]:
+		var mat := ShaderMaterial.new()
+		mat.shader = load(layer[1])
+		mat.set_shader_parameter("shore_mask", mask_tex)
+		mat.set_shader_parameter("shore_flags", flags_tex)
+		mat.set_shader_parameter("cells", float(W))
+		layer[0].material = mat
 
 ## Trees, bushes, rocks and breakables of a free cell, by the density of the
 ## forest there: thick woods (a tree on most cells), open woodland, open land.
@@ -659,7 +688,7 @@ func _build_lake(walkable_water: Dictionary) -> void:
 		poly.polygon = PackedVector2Array([cell_pos(c.x, c.y), cell_pos(c.x + 1, c.y),
 			cell_pos(c.x + 1, c.y + 1), cell_pos(c.x, c.y + 1)])
 		body.add_child(poly)
-		if _rng.randf() < 0.22:
+		if _rng.randf() < 0.22 and not _near_shore(c, walkable_water, false):  # not over the banks
 			var fx := _fx(["ripple_a", "ripple_b", "ripple_ring"][_rng.randi() % 3], cell_of(Vector2(c) + Vector2(0.5, 0.5)), _chunk(Vector2(c)))
 			fx.modulate = Color(1, 1, 1, 0.5)
 			fx.z_index = -9
@@ -930,32 +959,99 @@ func show_all_chunks() -> void:
 ## enemy turn see-through, and the hidden character is drawn over them.
 var _occluded := {}  # actor -> true
 
+## How much a tree (its foot at `d` from the hero's feet) hides the hero:
+## 1 right in front of him, fading off smoothly to the sides and with the
+## distance, so that walking through a wood the trees thin out gently
+## around him instead of blinking one by one.
+static func _cover(d: Vector2) -> float:
+	var side := 1.0 - smoothstep(40.0, 82.0, absf(d.x))
+	var depth := smoothstep(-6.0, 14.0, d.y) * (1.0 - smoothstep(140.0, 180.0, d.y))  # pines are tall
+	return side * depth
+
+## Trees in front of the hero fade, more or less as they hide him, and
+## ease to their new transparency (every frame).
+func _fade_trees(delta: float) -> void:
+	var p := player.global_position
+	var k0 := _chunk_key(to_cell(p))
+	var base_z := 1 if player.sprite.lift > LEVEL_HEIGHT * 0.5 else 0
+	var target := {}
+	for di in [-1, 0, 1]:
+		for dj in [-1, 0, 1]:
+			for s in _tall.get(k0 + Vector2i(di, dj), []):
+				if s.z_index != base_z:
+					continue
+				var c := _cover(s.global_position - p)
+				if c > 0.0:
+					target[s] = c
+					if not _fade.has(s):
+						_fade[s] = 0.0
+	var step := delta * 3.5
+	for s in _fade.keys():
+		if not is_instance_valid(s):
+			_fade.erase(s)
+			continue
+		var v: float = move_toward(_fade[s], target.get(s, 0.0), step)
+		s.modulate.a = 1.0 - 0.65 * v  # the hero stays in sight through it
+		if v <= 0.0:
+			_fade.erase(s)
+		else:
+			_fade[s] = v
+
+## The hero's silhouette drawn over the trees hiding him, appearing as they
+## fade (thick woods: several see-through trees still hide him).
+var _ghost: Sprite2D
+
+func _process(_delta: float) -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	if _ghost == null:
+		_ghost = Sprite2D.new()
+		_ghost.z_as_relative = false
+		_ghost.z_index = 30
+		add_child(_ghost)
+	var a := 0.0
+	for v in _fade.values():  # as much as the most see-through tree
+		a = maxf(a, v * 0.5)
+	_ghost.visible = a > 0.01 and not player.dead
+	if not _ghost.visible:
+		return
+	var src: Sprite2D = player.sprite._sprite  # copy the frame shown now
+	_ghost.texture = src.texture
+	_ghost.centered = src.centered
+	_ghost.region_enabled = src.region_enabled
+	_ghost.region_rect = src.region_rect
+	_ghost.hframes = src.hframes
+	_ghost.vframes = src.vframes
+	_ghost.frame = src.frame
+	_ghost.offset = src.offset
+	_ghost.global_transform = src.global_transform
+	_ghost.modulate = Color(1, 1, 1, a)
+
+## Enemies hidden by trees are drawn over them (a few times a second); the
+## hero is seen through the trees, which fade.
 func _fade_occluders() -> void:
-	var now := []
 	_occluded.clear()
-	var actors := [player]
 	for e in _enemies:
-		if is_instance_valid(e) and not e.dead and e.process_mode != Node.PROCESS_MODE_DISABLED \
-				and e.global_position.distance_to(player.global_position) < 420.0:
-			actors.append(e)
-	for a in actors:
-		var p: Vector2 = a.global_position
+		if not is_instance_valid(e) or e.dead or e.process_mode == Node.PROCESS_MODE_DISABLED \
+				or e.global_position.distance_to(player.global_position) > 420.0:
+			continue
+		var p: Vector2 = e.global_position
 		var k0 := _chunk_key(to_cell(p))
-		var base_z := 1 if a.sprite.lift > LEVEL_HEIGHT * 0.5 else 0
+		var base_z := 1 if e.sprite.lift > LEVEL_HEIGHT * 0.5 else 0
+		var hidden := false
 		for di in [-1, 0, 1]:
 			for dj in [-1, 0, 1]:
 				for s in _tall.get(k0 + Vector2i(di, dj), []):
 					var d: Vector2 = s.global_position - p
 					if d.y > 2.0 and d.y < 125.0 and absf(d.x) < 56.0 and s.z_index == base_z:
-						_occluded[a] = true
-						if a == player and not s in now:
-							now.append(s)
-	for s in _faded:
-		if is_instance_valid(s) and not s in now:
-			s.modulate.a = 1.0
-	for s in now:
-		s.modulate.a = 0.45
-	_faded = now
+						hidden = true
+						break
+				if hidden:
+					break
+			if hidden:
+				break
+		if hidden:
+			_occluded[e] = true
 
 # --- relief: plateaus, cliffs, ramps -------------------------------------------
 
@@ -1257,6 +1353,7 @@ func _physics_process(delta: float) -> void:
 	if _cull_t <= 0.0:
 		_cull_t = 0.15
 		_cull_chunks()
+	_fade_trees(delta)
 	_fade_t -= delta
 	if _fade_t <= 0.0:
 		_fade_t = 0.08

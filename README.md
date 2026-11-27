@@ -45,7 +45,11 @@ et plus).
     d'une falaise.
 - **Relief** : les hautes terres sont bordées de falaises ; on y monte par des rampes taillées dans la roche ; les
   personnages et le décor d'en haut sont dessinés un niveau plus haut.
-- **Forêts** : les arbres devant le héros ou un ennemi proche s'estompent, et le personnage caché passe au premier plan.
+- **Forêts** : les arbres devant le héros s'estompent en douceur, d'autant plus qu'ils le cachent (une éclaircie qui
+  le suit, sans clignotement), et sa silhouette reste visible à travers les bois épais ; un ennemi caché par un arbre
+  passe au premier plan.
+- **Rivages** : l'eau et la terre se rejoignent le long d'une rive courbe et irrégulière (terre mouillée, eau claire
+  des hauts-fonds, écume qui vient lécher le bord), tracée par les shaders de `shaders/`.
 - **Décor destructible** : tonneaux, jarres, caisses, foin, hautes herbes, petits arbres et tas de pierres, cassés en
   plusieurs coups (2 coups légers pour l'herbe, 3 pour le bois, 4 pour la pierre ; un coup lourd compte double), avec
   éclats de bois ou de pierre à chaque coup.
