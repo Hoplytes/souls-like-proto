@@ -3,7 +3,7 @@ extends Control
 ## the death screen.
 
 var player: Player
-var boss: Boss
+var boss: Actor  # a Boss, or the SkeletonKing
 var show_boss := false
 var hint := ""
 var message := ""
@@ -39,12 +39,12 @@ const HELP := [
 	"L ou Maj (maintenir) : bouclier",
 	"  lever le bouclier au moment du coup = parade",
 	"  attaque légère dans le dos / après parade = critique",
-	"R : boire une fiole",
+	"R : boire une fiole   F : utiliser l'objet   G : objet suivant",
 	"I / clic molette : verrouiller   U / O : changer de cible",
 	"E : interagir (feu, objets, coffres, brouillard)",
 	"H : aide   M : son   N : type de sons",
 	"Échap : pause   Tab : carte   T : téléportation (test)",
-	"Manette : A/B/X/Y, LB bouclier, LT fiole, RB/RT attaques,",
+	"Manette : A/B, X objet, croix haut/bas objets, LB bouclier, LT fiole, RB/Y/RT attaques,",
 	"  Start pause, Select carte, R3 verrouiller",
 ]
 
@@ -148,9 +148,17 @@ func _draw() -> void:
 			var m := float(k) * 6.0
 			draw_rect(Rect2(m, m, vw - m * 2.0, vh - m * 2.0), Color(0.6, 0.0, 0.0, a * (1.0 - k / 6.0)), false, 6.0)
 	# The bars grow with the levels (as in the Souls), up to a limit.
-	_bar(Vector2(10, 10), minf(player.max_hp * 1.3, vw * 0.45), 6, ratio, Color(0.7, 0.12, 0.1), _hp_lag)
+	var hp_w := minf(player.max_hp * 1.3, vw * 0.45)
+	var hp_col := Color(0.7, 0.12, 0.1) if player.poisoned <= 0.0 else Color(0.45, 0.5, 0.12)
+	_bar(Vector2(10, 10), hp_w, 6, ratio, hp_col, _hp_lag)
+	if player.poisoned > 0.0:
+		_text(Vector2(18 + hp_w, 17), "Empoisonné  %d s" % ceili(player.poisoned), 8, Color(0.7, 0.9, 0.35))
 	_bar(Vector2(10, 20), minf(player.max_stamina * 1.1, vw * 0.4), 4, player.stamina / player.max_stamina,
 		Color(0.25, 0.6, 0.3))
+	if player.poison > 0.0:  # the poison building up, right of the stamina
+		var sx := 18.0 + minf(player.max_stamina * 1.1, vw * 0.4)
+		_bar(Vector2(sx, 20), 50, 4, player.poison / 100.0, Color(0.55, 0.75, 0.2))
+		_text(Vector2(sx + 54, 25), "poison", 7, Color(0.65, 0.85, 0.35))
 	for i in player.max_flasks:
 		var p := Vector2(14 + i * 10, 36)
 		var c := Color(1, 0.6, 0.2) if i < player.flasks else Color(0.25, 0.22, 0.2)
@@ -169,18 +177,27 @@ func _draw() -> void:
 		_text(Vector2(box.position.x, box.position.y - 3), "+%d" % _gain, 9, Color(0.85, 0.9, 1.0, ga),
 			HORIZONTAL_ALIGNMENT_RIGHT, box.size.x - 6)
 	_text(Vector2(vw - 70, vh - 6), "version " + BuildInfo.VERSION, 7, Color(0.7, 0.7, 0.7, 0.6))
-	_text(Vector2(10, vh - 10), "Arme : " + Weapons.DATA[player.weapon].name, 8, Color(0.85, 0.8, 0.65))
+	_draw_item_slot(vh)
+	var lv := int(Progress.data.get("weapon_lv", 0))
+	var wname: String = "Arme : " + Weapons.DATA[player.weapon].name + (" +%d" % lv if lv > 0 else "")
+	_text(Vector2(10, vh - 10), wname, 8, Color(0.85, 0.8, 0.65) if player.resin_t <= 0.0 else Color(1.0, 0.6, 0.25))
+	if player.resin_t > 0.0:  # the burning weapon, and the time it has left
+		_bar(Vector2(10, vh - 7), 60, 1, player.resin_t / 60.0, Color(1.0, 0.55, 0.2))
 	if show_boss and boss and is_instance_valid(boss) and _death_t < 0.0:
 		var w := 360.0
 		var x := (vw - w) / 2
-		_text(Vector2(x, vh - 30), boss.boss_name, 10, Color(0.9, 0.85, 0.75))
+		_text(Vector2(x, vh - 30), boss.get("boss_name"), 10, Color(0.9, 0.85, 0.75))
 		_bar(Vector2(x, vh - 24), w, 5, float(boss.hp) / boss.max_hp, Color(0.65, 0.1, 0.08))
 	if hint != "" and _death_t < 0.0:
 		_text(Vector2(0, vh * 0.68), hint, 9, Color(1, 0.95, 0.8), HORIZONTAL_ALIGNMENT_CENTER, vw)
 	if show_help:
-		draw_rect(Rect2(vw - 232, 8, 224, 12 + HELP.size() * 11), Color(0, 0, 0, 0.55))
+		var f := get_theme_default_font()
+		var w := 0.0
+		for line in HELP:
+			w = maxf(w, f.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x)
+		draw_rect(Rect2(vw - w - 20, 8, w + 12, 12 + HELP.size() * 11), Color(0, 0, 0, 0.55))
 		for i in HELP.size():
-			_text(Vector2(vw - 226, 20 + i * 11), HELP[i], 8, Color(0.85, 0.85, 0.85))
+			_text(Vector2(vw - w - 14, 20 + i * 11), HELP[i], 8, Color(0.85, 0.85, 0.85))
 	if message != "":
 		var a := clampf(_msg_t * 1.5, 0, 1)
 		draw_rect(Rect2(0, vh * 0.38, vw, 56), Color(0, 0, 0, 0.6 * a))
@@ -204,6 +221,18 @@ func _draw_intro(vw: float, vh: float) -> void:
 		draw_string(f, Vector2(0, y), INTRO[k], HORIZONTAL_ALIGNMENT_CENTER, vw, 11, Color(0.85, 0.78, 0.62, a))
 	var skip := clampf((_intro_t - 1.5) / 1.0, 0.0, 0.6)
 	draw_string(f, Vector2(0, vh - 14), "une touche pour passer", HORIZONTAL_ALIGNMENT_CENTER, vw, 7, Color(0.6, 0.58, 0.55, skip))
+
+## The quick item slot, bottom left: the item's icon, how many, its name.
+func _draw_item_slot(vh: float) -> void:
+	var box := Rect2(10, vh - 50, 28, 28)
+	draw_rect(box, Color(0, 0, 0, 0.55))
+	draw_rect(box, Color(0.55, 0.45, 0.3, 0.6), false, 1.0)
+	var id := Items.selected()
+	if id == "":
+		return
+	Items.draw_icon(self, id, box.get_center(), 22.0)
+	_text(Vector2(box.position.x, box.end.y - 2), str(Items.count(id)), 8, Color(1, 1, 1), HORIZONTAL_ALIGNMENT_RIGHT, box.size.x - 2)
+	_text(Vector2(box.end.x + 6, box.end.y - 4), Items.DATA[id].name, 8, Color(0.85, 0.82, 0.75))
 
 func _draw_death(vw: float, vh: float) -> void:
 	var a := clampf((_death_t - 0.4) / 1.6, 0.0, 1.0)

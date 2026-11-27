@@ -8,6 +8,8 @@ var _show := 0.0
 var _sum := 0
 var _sum_t := 0.0
 var _lag := 1.0
+## A boss shows its health at the bottom of the screen instead.
+var boss_hidden := false
 
 func _ready() -> void:
 	z_as_relative = false
@@ -30,7 +32,7 @@ func _process(delta: float) -> void:
 	_lag = maxf(r, move_toward(_lag, r, delta * 0.45))
 	var p = enemy.get("player")
 	var locked: bool = p != null and is_instance_valid(p) and p.lock_target == enemy
-	visible = (_show > 0.0 or locked) and not enemy.dead
+	visible = (_show > 0.0 or locked) and not enemy.dead and not boss_hidden
 	if visible:
 		queue_redraw()
 

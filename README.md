@@ -17,10 +17,18 @@ et plus).
 - **Sauvegarde** automatique (`user://save.json`, dans le navigateur le stockage du site) : âmes, niveau,
   caractéristiques, feux allumés, boss vaincus, objets pris, tache de sang. L'écran d'accueil propose **Continuer** ou
   **Nouvelle partie** (avec confirmation).
-- **Objets et coffres** : des lueurs blanches à ramasser et des coffres à ouvrir (maisons, ruines, camp, ville,
-  donjon, hautes terres, ponton) ; quatre **éclats de fiole** portent les fioles de 3 à 7.
-- **Élites** : plus grands, plus sombres et bien plus coriaces, ils gardent les trésors (camp, cimetière, ville,
-  donjon) et rapportent cinq fois plus d'âmes.
+- **Objets et coffres** : des lueurs blanches (un rayon de lumière les signale de loin) à ramasser et des coffres à
+  ouvrir (maisons, ruines, camp, ville, donjon, hautes terres, ponton) ; quatre **éclats de fiole** portent les fioles
+  de 3 à 7. Les ennemis laissent parfois tomber un objet.
+- **Objets à utiliser** (emplacement rapide en bas à gauche, F pour utiliser, G pour changer) : **bombe incendiaire**
+  (explose en flammes, le sol brûle un moment), **couteau de lancer**, **résine de charbon** (arme enflammée une
+  minute, plus de dégâts), **mousse violette** (guérit du poison), **os du retour** (ramène au dernier feu).
+- **Renforcer l'arme** au feu de camp, de +1 à +5, avec des **éclats de titanite** (coffres, élites) et des âmes.
+- **Poison** : des nappes de gaz dans les Terres mortes remplissent une jauge ; pleine, le héros est empoisonné et perd
+  de la santé un moment (la mousse violette ou un feu de camp en guérissent).
+- **Fiche du personnage** dans le menu pause : niveau, caractéristiques, arme, fioles, objets, progression.
+- **Élites** : plus grands, plus sombres et bien plus coriaces, ils gardent les trésors (camp, cimetière, donjon),
+  rapportent cinq fois plus d'âmes et souvent un éclat de titanite.
 - **Messages au sol** (glyphes orange, E pour lire) : conseils et avertissements laissés par ceux qui sont passés
   avant.
 - **Brouillard des boss** : un mur de brume blanche entoure leur arène ; E pour le traverser, et plus de sortie tant
@@ -77,6 +85,9 @@ et plus).
   d'eux.
 - Deux boss (art de Flare), **Glacevive, la Wyverne des cimes** et **Astérion, le Minotaure** : grand coup de hache
   en arc, saut écrasant et charge, annoncés par une zone rouge. Sous 50 % de vie, ils entrent en rage.
+- Un troisième boss, **Ossian, le Roi des Os** (`scripts/skeleton_king.gd`), squelette géant du pack, sur la place de la
+  ville en ruine : coups de hache, ruée, onde magique, vague d'énergie ; en rage, tempête de foudre, souffle de
+  flammes et morts qui se relèvent de leurs os. Les squelettes vaincus s'effondrent en tas d'os.
 
 ## Commandes
 
@@ -85,15 +96,17 @@ et plus).
 | Se déplacer | ZQSD (AZERTY) / WASD (QWERTY) / flèches | Stick gauche, croix |
 | Roulade (au relâchement) ; maintenir : courir ; sans direction : pas en arrière | Espace | B |
 | Bouclier (maintenir) / parade | L ou Maj | LB |
-| Attaque légère | J ou clic gauche | X ou RB |
+| Attaque légère | J ou clic gauche | RB |
 | Attaque lourde | K ou clic droit | Y ou RT |
 | Boire une fiole | R | LT |
+| Utiliser l'objet de l'emplacement rapide | F | X |
+| Changer d'objet | G | Croix haut / bas |
 | Verrouiller un ennemi / lâcher | I ou clic molette | R3 (clic du stick droit) |
 | Changer de cible verrouillée | U / O ou molette | Stick droit gauche / droite |
 | Interagir : feu de camp, objet, coffre, tache de sang, brouillard | E | A |
 | Carte | Tab | Select |
 | Téléportation (test) | T, puis un chiffre ou un clic | (menu pause) |
-| Menu pause (reprendre, carte, téléportation, caméra, son, aide, menu principal, recommencer) | Échap ou P | Start |
+| Menu pause (reprendre, fiche du personnage, carte, téléportation, caméra, son, aide, menu principal, recommencer) | Échap ou P | Start |
 | Aide | H | |
 | Couper / remettre le son | M | |
 | Sons enregistrés ↔ sons de synthèse | N | |
@@ -116,6 +129,8 @@ et plus).
 | `scripts/breakable.gd` | Décor destructible |
 | `scripts/skeleton.gd` | Ennemis ordinaires (squelettes, brigands) : comportement, **types et coups sous forme de données** |
 | `scripts/projectile.gd` | Traits magiques et couteaux lancés |
+| `scripts/skeleton_king.gd` | Le Roi des Os, boss de la ville en ruine |
+| `scripts/items.gd`, `thrown.gd` | Objets à utiliser (emplacement rapide), bombe incendiaire |
 | `scripts/enemy_bar.gd` | Barre de vie au-dessus des ennemis |
 | `scripts/pickup.gd`, `bonfire.gd`, `fog_wall.gd` | Objets et tache de sang, feux de camp, brouillard des boss |
 | `scripts/boss.gd` | Les boss (Minotaure, wyverne) et leurs attaques |

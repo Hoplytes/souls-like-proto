@@ -82,12 +82,13 @@ static func float_text(parent: Node, pos: Vector2, text: String, col: Color) -> 
 
 ## Animated effects of the fantasy pack (res://local/fantasy/fx/, licensed):
 ## flames, portals, debris, spells. Looping ones start on a random frame;
-## `one_shot` ones play once and vanish. `size` scales the picture.
+## `one_shot` ones play once and vanish (or, with `keep`, stay on their last
+## frame). `size` scales the picture.
 const PACK_RES := 128.0 / 96.0
 static var _pack_meta := {}
 static var _pack_frames := {}
 
-static func pack(name: String, at: Vector2, parent: Node, one_shot := false, size := 1.0) -> AnimatedSprite2D:
+static func pack(name: String, at: Vector2, parent: Node, one_shot := false, size := 1.0, keep := false) -> AnimatedSprite2D:
 	if _pack_meta.is_empty():
 		_pack_meta = JSON.parse_string(FileAccess.get_file_as_string("res://local/fantasy/fx/fx.json"))
 	var m: Dictionary = _pack_meta[name]
@@ -114,10 +115,14 @@ static func pack(name: String, at: Vector2, parent: Node, one_shot := false, siz
 	s.play()
 	if loops:
 		s.frame = randi() % int(m.frames)
-	elif one_shot:
+	elif one_shot and not keep:
 		s.animation_finished.connect(s.queue_free)
 	parent.add_child(s)
 	return s
+
+## A still picture of the pack's effects (light beam, burning ground).
+static func still(name: String) -> Texture2D:
+	return load("res://local/fantasy/fx/%s.png" % name)
 
 ## Width of a pack effect in the world, at size 1 (to fit it to a hit zone).
 static func pack_width(name: String) -> float:

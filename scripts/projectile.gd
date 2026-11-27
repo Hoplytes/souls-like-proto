@@ -1,8 +1,9 @@
 class_name Projectile
 extends Hitbox
-## A missile from an enemy: a magic bolt (the pack's effect) or a thrown
-## knife. It flies straight at chest height, hurts the hero (it can be
-## blocked, and a parry deflects it) and breaks on walls, trees and rocks.
+## A missile: a magic bolt (the pack's effect) or a knife, thrown by an
+## enemy at the hero (it can be blocked, and a parry deflects it) or by the
+## hero at the enemies. It flies straight at chest height and breaks on
+## walls, trees and rocks.
 
 const HEIGHT := 18.0  # flies at chest height
 var velocity := Vector2.ZERO
@@ -12,7 +13,7 @@ var _spin := 0.0
 var _gone := false
 
 static func launch(parent: Node, src: Node2D, pos: Vector2, dir: Vector2, speed: float, dmg: int,
-		poise: int, what: String) -> Projectile:
+		poise: int, what: String, targets: int = 8) -> Projectile:
 	var p := Projectile.new()
 	p.source = src
 	p.damage = dmg
@@ -20,7 +21,7 @@ static func launch(parent: Node, src: Node2D, pos: Vector2, dir: Vector2, speed:
 	p.ranged = true
 	p.kind = what
 	p.collision_layer = 0
-	p.collision_mask = 8 | 1  # the hero's hurtbox, and the world
+	p.collision_mask = targets | 1  # the hurtboxes aimed at (8 the hero's, 16 the enemies'), and the world
 	p.monitorable = false
 	var body := CollisionShape2D.new()  # the hero's body, at chest height
 	var c := CircleShape2D.new()
@@ -66,7 +67,7 @@ func _on_area(a: Area2D) -> void:
 	if _gone:
 		return
 	var target = a.get_meta("actor", null)
-	if target == null or target == source or not target is Player:
+	if target == null or target == source or (collision_mask & 8 and not target is Player):
 		return
 	target.receive_hit(self)
 	_burst()

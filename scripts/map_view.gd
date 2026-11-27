@@ -92,10 +92,9 @@ func _draw() -> void:
 		var col := Color(0.55, 0.55, 0.55) if dead else Color(0.9, 0.18, 0.15)
 		draw_line(p + Vector2(-3.5, -3.5), p + Vector2(3.5, 3.5), col, 2.0)
 		draw_line(p + Vector2(-3.5, 3.5), p + Vector2(3.5, -3.5), col, 2.0)
-		if model == "wyvern_water":
-			_text(p + Vector2(0, -8), "Glacevive" + (" (vaincue)" if dead else ""), 7, col.lightened(0.3))
-		else:
-			_text(p + Vector2(0, -8), "Astérion" + (" (vaincu)" if dead else ""), 7, col.lightened(0.3))
+		var arena: Dictionary = Game.ARENAS[model]
+		var beaten := " (vaincue)" if arena.female else " (vaincu)"
+		_text(p + Vector2(0, -8), arena.short + (beaten if dead else ""), 7, col.lightened(0.3))
 	# The hero: an arrow pointing where he faces, blinking softly.
 	var hp := _at(Game.to_cell(game.player.global_position))
 	var f: Vector2 = game.player.facing.normalized()

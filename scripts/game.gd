@@ -47,9 +47,12 @@ const PLACE_CELLS := {
 ## Boss arenas: centre cell, radius in cells, where the teleport menu drops you.
 const ARENAS := {
 	"minotaur": {"center": HALL_AT + Vector2(6.5, 6.5), "radius": 4.6, "label": "Boss : Astérion, le Minotaure",
-		"entry": HALL_AT + Vector2(11.5, 11.5)},
+		"entry": HALL_AT + Vector2(11.5, 11.5), "short": "Astérion", "female": false},
 	"wyvern_water": {"center": WorldMap.WYVERN, "radius": WorldMap.WYVERN_RADIUS, "label": "Boss : Glacevive, la Wyverne",
-		"entry": WorldMap.WYVERN + Vector2(-6.0, 6.5)},
+		"entry": WorldMap.WYVERN + Vector2(-6.0, 6.5), "short": "Glacevive", "female": true},
+	# The plaza of the ruined city (its colonnade and statue inside the fog).
+	"king": {"center": WorldMap.CITY, "radius": 4.2, "label": "Boss : Ossian, le Roi des Os",
+		"entry": WorldMap.CITY + Vector2(5.0, 3.2), "short": "Ossian", "female": false},  # on the road from the bonfire
 }
 const HOUSE_LOOKS := {  # wall, wall with a window, roof
 	"slate": ["Wall D1", "Wall D7", "Roof D"], "tiles": ["Wall D1", "Wall D7", "Roof C"],
@@ -117,7 +120,7 @@ func _theme_fantasy() -> Dictionary:
 
 var world: Node2D
 var player: Player
-var boss: Boss  # the boss being fought (for the HUD)
+var boss: Actor  # the boss being fought (for the HUD): a Boss, or the SkeletonKing
 var hud
 var music: Music
 var cam: Camera2D
@@ -235,10 +238,13 @@ func _ready() -> void:
 	player.add_child(cam)
 	Fx.camera = cam
 	player.died.connect(_on_player_died)
+	player.wants_home.connect(_go_home)
+	player.can_go_home = func() -> bool: return _sealed.is_empty()
 
 	_spawn_enemies()
 	_spawn_bosses()
 	_place_loot()
+	_place_gas()
 	_place_messages()
 	_spawn_stain()
 
@@ -297,7 +303,7 @@ func _preload() -> void:
 		for e in theme[b].enemies:
 			models[e[0]] = true
 	for m in ARENAS:
-		models[m] = true
+		models["pack/skeleton_a" if m == "king" else m] = true  # the king is a skeleton of the pack
 	for m in models:
 		HdSprite.preload_flare(m)
 	for b in BIOMES:
@@ -895,7 +901,8 @@ func _house(i0: int, j0: int, length: int, look: String) -> void:
 	_prop("Misc B27_S", Vector2(i0 + 0.5, j0 + 0.5), 8)
 	_breakable(["break_barrel_a", "break_jar", "break_crate"][(i0 + j0) % 3], cell_pos(i0 + 0.4, j1 + 0.6), 6)
 	if length > 2:
-		_chest("house_%d_%d" % [i0, j0], Vector2(i1 + 0.3, j0 + 0.4), "A", "soul_s")
+		var loot: String = ["firebombs", "knives", "soul_s", "moss", "resin", "bone"][(i0 * 7 + j0 * 13) % 6]
+		_chest("house_%d_%d" % [i0, j0], Vector2(i1 + 0.3, j0 + 0.4), "A", loot)
 	# Fade the front away while the hero is inside.
 	var inside := Area2D.new()
 	inside.collision_layer = 0
@@ -1304,7 +1311,6 @@ func _spawn_enemies() -> void:
 	# Elites guarding the treasures.
 	_add_enemy("pack/brigand_b", WorldMap.CAMP + Vector2(-1.7, -0.3), true)
 	_add_enemy("pack/skeleton_c", WorldMap.GRAVEYARD + Vector2(0.5, -2.3), true)
-	_add_enemy("pack/skeleton_a", WorldMap.CITY + Vector2(1.6, 1.2), true)
 	_add_enemy("pack/skeleton_c", HALL_AT + Vector2(17.6, 5.6), true)
 	var guards := []
 	for e in theme.dungeon.enemies:
@@ -1328,13 +1334,18 @@ func _spawn_bosses() -> void:
 	for model in ARENAS:
 		if Progress.data.defeated.has(model):
 			continue
-		var b := Boss.new()
-		b.flare_name = model
-		b.position = cell_of(ARENAS[model].center) + Vector2(0, -20)
+		var b: Actor
+		if model == "king":
+			b = SkeletonKing.new()
+			b.position = cell_of(ARENAS[model].center + Vector2(-1.3, -1.3))  # behind the statue
+		else:
+			b = Boss.new()
+			b.flare_name = model
+			b.position = cell_of(ARENAS[model].center) + Vector2(0, -20)
 		b.player = player
 		world.add_child(b)
 		b.died.connect(_on_boss_died.bind(model))
-		b.phase_changed.connect(func(_p): music.play("boss_phase2", 2.5))
+		b.connect("phase_changed", func(_p): music.play("boss_phase2", 2.5))
 		_bosses[model] = b
 		_make_fog(model)
 	boss = _bosses.get("minotaur")
@@ -1371,6 +1382,7 @@ func _physics_process(delta: float) -> void:
 		_update_area()
 		_update_biome(false)
 	_update_heights()
+	_breathe_gas(delta)
 	_update_uses()
 	if Input.is_action_just_pressed("teleport") and not player.dead:
 		open_teleport_menu()
@@ -1414,16 +1426,16 @@ func _close_arena(model: String) -> void:
 	_sealed[model] = _fogs[model]
 	Fx.shake(5)
 	Sfx.play(self, "parry", null, -2.0, 0.0)
-	boss.activate()
+	boss.call("activate")
 	music.play("boss_phase1", 1.0)
 	hud.boss = boss
 	hud.show_boss = true
-	hud.announce(boss.boss_name, Color(0.9, 0.8, 0.6), "", 2.0)
+	hud.announce(boss.get("boss_name"), Color(0.9, 0.8, 0.6), "", 2.0)
 
 func _on_boss_died(model: String) -> void:
 	Progress.data.defeated[model] = true
-	var b: Boss = _bosses[model]
-	_gain_souls(b.souls(), b.global_position)
+	var b = _bosses[model]
+	_gain_souls(b.souls() if b is Boss else b.souls, b.global_position)
 	Fx.hitstop(get_tree(), 0.25)
 	hud.show_boss = false
 	music.stop(2.5)
@@ -1579,10 +1591,39 @@ func _open_bonfire_menu(place: String, focus: int = 0) -> void:
 	var d := Progress.data
 	_open_menu("Feu · " + PLACES[place].label, [
 		["Monter de niveau", _open_level_menu.bind(place, 0)],
+		["Renforcer l'arme", _open_upgrade_menu.bind(place)],
 		["Voyager", _open_travel_menu.bind(place)],
 		["", null],
 		["Se relever", _close_menu],
 	], "Niveau %d · %d âmes · %d fioles" % [d.level, d.souls, d.flasks], focus)
+
+## The weapon reinforced with titanite shards and souls (+1 to +5).
+func _open_upgrade_menu(place: String) -> void:
+	var d := Progress.data
+	var lv := int(d.weapon_lv)
+	var name: String = Weapons.DATA[player.weapon].name
+	var items := [["%s +%d · dégâts ×%.2f" % [name, lv, Progress.weapon_mult()], null], ["", null]]
+	if lv < Progress.WEAPON_MAX:
+		var cost: Array = Progress.UPGRADE_COST[lv]
+		items.append(["Vers +%d (dégâts ×%.2f) : %d éclat%s de titanite et %d âmes" % [lv + 1,
+			Progress.weapon_mult(lv + 1), cost[0], "s" if cost[0] > 1 else "", cost[1]], null])
+		items.append(["Vous avez %d éclat%s et %d âmes" % [d.titanite, "s" if int(d.titanite) > 1 else "", d.souls], null])
+		items.append(["", null])
+		items.append(["Renforcer : +%d → +%d" % [lv, lv + 1], _upgrade_weapon.bind(place)])
+	else:
+		items.append(["L'arme est renforcée au maximum", null])
+	items.append(["Retour", _open_bonfire_menu.bind(place, 1)])
+	_open_menu("Renforcer l'arme", items, "Les éclats de titanite se trouvent dans les coffres et sur les élites")
+
+func _upgrade_weapon(place: String) -> void:
+	if Progress.upgrade_weapon():
+		Sfx.play(self, "guard_break", null, -4.0, 0.0)
+		Sfx.flare(self, "level_up", null, -4.0)
+		var fx := Fx.pack("fx_spikes", Vector2(0, 2), player, true, 0.9)
+		fx.process_mode = Node.PROCESS_MODE_ALWAYS
+	else:
+		Sfx.flare(self, "no_mana", null, -4.0)
+	_open_upgrade_menu(place)
 
 ## Souls buy levels, one characteristic at a time; each level costs more.
 func _open_level_menu(place: String, focus: int = 0) -> void:
@@ -1621,8 +1662,9 @@ func _open_travel_menu(place: String) -> void:
 	if items.is_empty():
 		items.append(["Aucun autre feu allumé", null])
 	items.append(["", null])
-	items.append(["Retour", _open_bonfire_menu.bind(place, 1)])
+	items.append(["Retour", _open_bonfire_menu.bind(place, 2)])
 	_open_menu("Voyager", items, "D'un feu allumé à un autre")
+
 
 func _travel(place: String) -> void:
 	_close_menu()
@@ -1640,6 +1682,21 @@ func _travel(place: String) -> void:
 func _on_enemy_died(e: SkeletonEnemy) -> void:
 	Progress.data.kills = int(Progress.data.kills) + 1
 	_gain_souls(e.souls, e.global_position)
+	var loot := ""
+	if e.elite:
+		loot = "titanite" if randf() < 0.6 else ""
+	elif randf() < 0.1:
+		var total := 0.0
+		for d in DROPS:
+			total += d[1]
+		var r := randf() * total
+		for d in DROPS:
+			r -= d[1]
+			if r <= 0.0:
+				loot = d[0]
+				break
+	if loot != "":
+		_drop(e.global_position + Vector2(randf_range(-6, 6), 4), loot)
 
 func _gain_souls(n: int, from: Vector2) -> void:
 	Progress.add_souls(n)
@@ -1682,7 +1739,23 @@ const LOOT := {
 	"soul_s": {"name": "Âme d'un soldat égaré", "desc": "+200 âmes", "souls": 200},
 	"soul_m": {"name": "Âme d'un chevalier errant", "desc": "+500 âmes", "souls": 500},
 	"soul_l": {"name": "Âme d'un héros oublié", "desc": "+1200 âmes", "souls": 1200},
+	"titanite": {"name": "Éclat de titanite", "desc": "Pour renforcer l'arme, au feu de camp", "titanite": 1},
+	"titanite2": {"name": "Éclats de titanite ×2", "desc": "Pour renforcer l'arme, au feu de camp", "titanite": 2},
+	"firebombs": {"name": "Bombes incendiaires ×3", "item": "firebomb", "count": 3},
+	"knives": {"name": "Couteaux de lancer ×6", "item": "knife", "count": 6},
+	"resin": {"name": "Résine de charbon", "item": "resin", "count": 1},
+	"moss": {"name": "Mousse violette ×2", "item": "moss", "count": 2},
+	"bone": {"name": "Os du retour", "item": "bone", "count": 1},
+	# Dropped by enemies, now and then.
+	"drop_firebomb": {"name": "Bombe incendiaire", "item": "firebomb", "count": 1},
+	"drop_knives": {"name": "Couteaux de lancer ×3", "item": "knife", "count": 3},
+	"drop_moss": {"name": "Mousse violette", "item": "moss", "count": 1},
+	"drop_bone": {"name": "Os du retour", "item": "bone", "count": 1},
+	"drop_resin": {"name": "Résine de charbon", "item": "resin", "count": 1},
 }
+## What enemies drop now and then (10 %), with weights; elites often drop titanite.
+const DROPS := [["drop_knives", 3.0], ["drop_firebomb", 2.0], ["drop_moss", 2.0], ["drop_bone", 1.0],
+	["drop_resin", 1.0], ["titanite", 1.0]]
 
 ## Items and chests of the world, each found once (Progress.data.taken).
 ## Four flask shards: in the brigands' camp, the ruined city, the graveyard
@@ -1698,7 +1771,7 @@ func _place_loot() -> void:
 	var n := 0
 	for r in map.ruins_rooms:
 		if n < 3:
-			_chest("ruin_%d" % n, Vector2(r.position) + Vector2(0.75, 0.75), "A", "soul_m" if n == 0 else "soul_s")
+			_chest("ruin_%d" % n, Vector2(r.position) + Vector2(0.75, 0.75), "A", ["titanite2", "soul_m", "firebombs"][n])
 		n += 1
 	# On the highlands, one per region, where the climb leads.
 	var rng := RandomNumberGenerator.new()
@@ -1715,14 +1788,58 @@ func _place_loot() -> void:
 				inner = false
 		if inner:
 			picked[region] = true
-			_item("high_" + region, Vector2(c) + Vector2(0.5, 0.5), "soul_m")
+			_item("high_" + region, Vector2(c) + Vector2(0.5, 0.5),
+				{"prairie": "knives", "ruins": "titanite", "snow": "titanite", "caves": "soul_m"}[region])
+
+## Pools of poison gas in the dead lands (two by the graveyard, others along
+## the way): breathing it fills the poison gauge.
+var _gas: Array[Vector2] = []
+
+func _place_gas() -> void:
+	var spots := [WorldMap.GRAVEYARD + Vector2(-5.0, 3.5), WorldMap.GRAVEYARD + Vector2(-4.0, 6.0),
+		WorldMap.GRAVEYARD + Vector2(5.5, 2.0)]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 31
+	var tries := 0
+	while spots.size() < 12 and tries < 3000:
+		tries += 1
+		var c := Vector2i(rng.randi_range(4, W - 5), rng.randi_range(4, W - 5))
+		if map.region_at(c) != "caves" or not map.is_free(c) or level_at(c) != 0 or _occupied.has(c) \
+				or map.road[WorldMap.idx(c)] != 0:
+			continue
+		var v := Vector2(c) + Vector2(0.5, 0.5)
+		if v.distance_to(PLACES.caves.cell) < 8.0 or v.distance_to(WorldMap.PORTAL) < 6.0:
+			continue
+		var far := true
+		for o in spots:
+			if v.distance_to(o) < 7.0:
+				far = false
+		if far:
+			spots.append(v)
+	for c in spots:
+		var node := Node2D.new()
+		node.position = cell_of(c)
+		node.z_index = -8  # on the ground
+		_chunk(c).add_child(node)
+		var fx := Fx.pack("fx_gas", Vector2.ZERO, node, false, 0.8)
+		fx.modulate = Color(1, 1, 1, 0.85)
+		_gas.append(node.position)
+	_item("graveyard_moss", WorldMap.GRAVEYARD + Vector2(-2.2, 4.6), "moss")
+
+func _breathe_gas(delta: float) -> void:
+	for g in _gas:
+		var d := player.global_position - g
+		if absf(d.x) < 60.0 and (d.x / 46.0) * (d.x / 46.0) + (d.y / 23.0) * (d.y / 23.0) < 1.0:
+			player.add_poison(32.0 * delta)
+			return
 
 ## Messages left on the ground, Souls style: advice (or a warning) to read.
 const MESSAGES := [
 	[Vector2(0.5, -3.0), "prairie", "Essayez la roulade\n(Espace : relâcher pour rouler, maintenir pour courir)"],
 	[Vector2(-2.6, 3.4), "camp", "Trésor devant… mais aussi un gardien"],
-	[Vector2(1.5, 3.6), "city", "Bouclier devant : essayez de frapper par derrière"],
+	[Vector2(1.5, 5.4), "city", "Grand ennemi devant… Bouclier ? Frappez de côté"],
 	[Vector2(0.5, 1.0), "graveyard", "Mage devant : roulez hors du cercle de foudre"],
+	[Vector2(-3.0, 5.2), "graveyard", "Attention : poison devant\n(la mousse violette en guérit, le feu de camp aussi)"],
 	[Vector2(2.4, 2.0), "portal", "Danger en bas, mais aussi des âmes"],
 	[Vector2(2.0, 1.0), "village", "Pas d'ennemis ici. Repos ?"],
 	[Vector2(-4.0, 0.0), "lake", "Vue magnifique devant"],
@@ -1786,16 +1903,49 @@ func _chest(key: String, cell: Vector2, look: String, loot: String) -> void:
 
 func _take(key: String, loot: String) -> void:
 	var l: Dictionary = LOOT[loot]
-	Progress.data.taken[key] = true
+	if key != "":  # found in the world once (dropped things are not kept)
+		Progress.data.taken[key] = true
 	if l.has("souls"):
 		_gain_souls(int(l.souls), player.global_position)
+	if l.has("titanite"):
+		Progress.data.titanite = int(Progress.data.titanite) + int(l.titanite)
+	if l.has("item"):
+		Items.add(l.item, int(l.count))
 	if loot == "shard":
 		Progress.data.flasks = mini(Progress.FLASKS_MAX, int(Progress.data.flasks) + 1)
 		player.max_flasks = int(Progress.data.flasks)
 		player.flasks = mini(player.flasks + 1, player.max_flasks)
 	Progress.save()
 	Sfx.flare(self, "flying_loot", null, -2.0)
-	hud.announce(l.name, Color(0.95, 0.88, 0.7), l.desc, 2.5)
+	var desc: String = l.get("desc", Items.DATA[l.item].desc if l.has("item") else "")
+	hud.announce(l.name, Color(0.95, 0.88, 0.7), desc, 2.5)
+
+## Something dropped by an enemy, to pick up (until the game is reloaded).
+func _drop(at: Vector2, loot: String) -> void:
+	var p := Pickup.new()
+	p.position = at
+	p.lift = height_at(at)
+	if p.lift > LEVEL_HEIGHT * 0.5:
+		p.z_index = 1
+	world.add_child(p)
+	var u := {"at": at, "r": 24.0, "text": "Ramasser"}
+	u.act = func() -> void:
+		_uses.erase(u)
+		p.queue_free()
+		_take("", loot)
+	_add_use(u)
+
+## The Os du retour: back to the bonfire where the hero last rested.
+func _go_home() -> void:
+	var place: String = Progress.data.spawn
+	player.sit(true)
+	Sfx.flare(self, "powers/teleport", null, -4.0)
+	var t := create_tween()
+	t.tween_property(hud, "fade", 1.0, 0.4)
+	t.tween_callback(func():
+		teleport_to_cell(PLACES[place].cell)
+		player.sit(false))
+	t.tween_property(hud, "fade", 0.0, 0.6)
 
 # --- the fog of the bosses -------------------------------------------------------
 
@@ -1931,6 +2081,7 @@ func open_pause_menu() -> void:
 	var muted := AudioServer.is_bus_mute(0)
 	_open_menu("Pause", [
 		["Reprendre", _close_menu],
+		["Personnage", open_status],
 		["Carte", open_map],
 		["Téléportation…", open_teleport_menu],
 		["Aide à l'écran : " + ("affichée" if hud.show_help else "masquée"), func():
@@ -1955,6 +2106,34 @@ func open_pause_menu() -> void:
 			get_tree().reload_current_scene()],
 	] + ([] if OS.has_feature("web") else [["Quitter le jeu", func(): get_tree().quit()]]),
 		"Échap ou B pour reprendre")
+
+## The hero's sheet (from the pause menu): level, characteristics, weapon,
+## flasks, items, and how the journey goes.
+func open_status() -> void:
+	var d := Progress.data
+	var lv := int(d.weapon_lv)
+	var items := [
+		["Niveau %d   ·   %d âmes   ·   prochain niveau : %d âmes" % [d.level, d.souls, Progress.level_cost()], null],
+		["Vigueur %d   ·   Endurance %d   ·   Force %d" % [d.vigor, d.endurance, d.strength], null],
+		["Santé %d / %d   ·   endurance %d   ·   dégâts %s" % [player.hp, player.max_hp, int(player.max_stamina),
+			Progress.damage_text(int(d.strength))], null],
+		["", null],
+		["%s +%d (dégâts ×%.2f)   ·   éclats de titanite : %d" % [Weapons.DATA[player.weapon].name, lv,
+			Progress.weapon_mult(), d.titanite], null],
+		["Fioles : %d / %d (chacune rend %d %% de la santé)" % [player.flasks, player.max_flasks,
+			int(Player.HEAL_SHARE * 100)], null],
+	]
+	var carried := []
+	for id in Items.ORDER:
+		if Items.count(id) > 0:
+			carried.append("%s ×%d" % [Items.DATA[id].name, Items.count(id)])
+	items.append(["Objets : " + (", ".join(carried) if not carried.is_empty() else "aucun"), null])
+	items.append(["", null])
+	items.append(["Feux allumés %d / %d   ·   boss vaincus %d / %d   ·   ennemis abattus %d   ·   morts %d" % [
+		d.lit.size(), PLACES.size(), d.defeated.size(), ARENAS.size(), d.kills, d.deaths], null])
+	items.append(["", null])
+	items.append(["Retour", open_pause_menu])
+	_open_menu("Personnage", items, "Échap ou B pour reprendre")
 
 ## Tab / Select, or from the pause menu: the map of the world.
 func open_map() -> void:
@@ -1995,13 +2174,17 @@ func _teleport_pick(p: Array) -> void:
 
 static func setup_inputs() -> void:
 	var map := {
-		"move_up": [[KEY_W], [KEY_UP], ["axis", JOY_AXIS_LEFT_Y, -1.0], ["btn", JOY_BUTTON_DPAD_UP]],
-		"move_down": [[KEY_S], [KEY_DOWN], ["axis", JOY_AXIS_LEFT_Y, 1.0], ["btn", JOY_BUTTON_DPAD_DOWN]],
+		"move_up": [[KEY_W], [KEY_UP], ["axis", JOY_AXIS_LEFT_Y, -1.0]],
+		"move_down": [[KEY_S], [KEY_DOWN], ["axis", JOY_AXIS_LEFT_Y, 1.0]],
 		"move_left": [[KEY_A], [KEY_LEFT], ["axis", JOY_AXIS_LEFT_X, -1.0], ["btn", JOY_BUTTON_DPAD_LEFT]],
 		"move_right": [[KEY_D], [KEY_RIGHT], ["axis", JOY_AXIS_LEFT_X, 1.0], ["btn", JOY_BUTTON_DPAD_RIGHT]],
 		"roll": [[KEY_SPACE], ["btn", JOY_BUTTON_B]],
 		"block": [[KEY_L], [KEY_SHIFT], ["btn", JOY_BUTTON_LEFT_SHOULDER]],
-		"attack_light": [[KEY_J], ["mouse", MOUSE_BUTTON_LEFT], ["btn", JOY_BUTTON_X], ["btn", JOY_BUTTON_RIGHT_SHOULDER]],
+		"attack_light": [[KEY_J], ["mouse", MOUSE_BUTTON_LEFT], ["btn", JOY_BUTTON_RIGHT_SHOULDER]],
+		# The quick item slot (as in the Souls: X uses it, the cross's up and down change it).
+		"use_item": [[KEY_F], ["btn", JOY_BUTTON_X]],
+		"next_item": [[KEY_G], ["btn", JOY_BUTTON_DPAD_DOWN]],
+		"prev_item": [["btn", JOY_BUTTON_DPAD_UP]],
 		"attack_heavy": [[KEY_K], ["mouse", MOUSE_BUTTON_RIGHT], ["btn", JOY_BUTTON_Y], ["axis", JOY_AXIS_TRIGGER_RIGHT, 1.0]],
 		"heal": [[KEY_R], ["axis", JOY_AXIS_TRIGGER_LEFT, 1.0]],
 		"interact": [[KEY_E], ["btn", JOY_BUTTON_A]],

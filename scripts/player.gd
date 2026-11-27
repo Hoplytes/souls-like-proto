@@ -6,8 +6,10 @@ extends Actor
 ## fighter with the round shield of the fantasy pack, or as the HD knight.
 
 signal stats_changed
+## An Os du retour was used: the game takes the hero back to his bonfire.
+signal wants_home
 
-enum State { FREE, ROLL, BACKSTEP, ATTACK, CRIT, HEAL, BLOCK, STAGGER, REST, DEAD }
+enum State { FREE, ROLL, BACKSTEP, ATTACK, CRIT, HEAL, BLOCK, STAGGER, REST, ITEM, DEAD }
 
 const SPEED := 95.0
 ## Souls-like feel: walking answers at once (almost no inertia); the weight
@@ -92,6 +94,17 @@ var _roll_hold := 0.0
 var _winded := false  # ran out of stamina while running: walk until the button is released
 var _ran_t := 9.0  # time since the hero stopped running (running attacks)
 var _crit_target: Actor
+var _item := ""
+var _item_done := false
+## Résine de charbon: seconds left of the burning weapon.
+var resin_t := 0.0
+## Poison (gas of the dead lands): the gauge builds up while breathing it;
+## full, the hero is poisoned and loses health for a while.
+const POISON_TIME := 25.0
+const POISON_DAMAGE := 2  # per second
+var poison := 0.0
+var poisoned := 0.0
+var _poison_tick := 0.0
 var _crit_kind := ""
 var _crit_done := false
 
@@ -128,6 +141,11 @@ func _physics_process(delta: float) -> void:
 		return
 	_hit_iframes = maxf(0.0, _hit_iframes - delta)
 	_ran_t += delta
+	_update_status(delta)
+	if Input.is_action_just_pressed("next_item"):
+		_cycle_item(1)
+	if Input.is_action_just_pressed("prev_item"):
+		_cycle_item(-1)
 	_read_buffer(delta)
 	_regen(delta)
 	_t += delta
@@ -142,6 +160,7 @@ func _physics_process(delta: float) -> void:
 		State.REST:
 			velocity = Vector2.ZERO
 		State.HEAL: _heal(input)
+		State.ITEM: _use_item(input)
 		State.BLOCK: _block(input)
 		State.STAGGER:
 			velocity = Vector2.ZERO
@@ -159,7 +178,7 @@ func _physics_process(delta: float) -> void:
 	stats_changed.emit()
 
 func _read_buffer(delta: float) -> void:
-	for a in ["attack_light", "attack_heavy", "heal", "block"]:
+	for a in ["attack_light", "attack_heavy", "heal", "block", "use_item"]:
 		if Input.is_action_just_pressed(a):
 			_buffer = a
 			_buffer_t = BUFFER_TIME
@@ -218,7 +237,7 @@ func _free(input: Vector2) -> void:
 		_turn_toward(_to_target(), delta)
 	elif input != Vector2.ZERO:
 		_turn_toward(input.normalized(), delta)
-	var action := _take_buffer(["roll", "attack_light", "attack_heavy", "heal", "block"])
+	var action := _take_buffer(["roll", "attack_light", "attack_heavy", "heal", "block", "use_item"])
 	if _start_action(action, input):
 		return
 	if Input.is_action_pressed("block"):
@@ -284,6 +303,8 @@ func _start_action(action: String, input: Vector2) -> bool:
 				_healed = false
 				sprite.play("idle", 2.0)
 				return true
+		"use_item":
+			return _start_item()
 	return false
 
 ## Walking, or, locked on an enemy with a model that has them, strafing
@@ -488,11 +509,14 @@ func _spawn_hitbox() -> void:
 	Sfx.play(self, swing, null, -3.0)
 	if _atk_kind == "heavy":
 		Sfx.play(self, "player_effort", null, -4.0)
+	var dmg: float = _atk.damage * Progress.damage_mult() * Progress.weapon_mult() * (1.25 if resin_t > 0.0 else 1.0)
 	Hitbox.spawn(get_parent(), self, pos, facing.angle(), _atk.shape, _atk.size,
-		int(round(_atk.damage * Progress.damage_mult())), _atk.poise, 16, _atk.active + 0.02)
+		int(round(dmg)), _atk.poise, 16, _atk.active + 0.02)
 	if _atk.shape == "circle":
-		Fx.slash_arc(get_parent(), center, facing.angle(), _atk.size.x + _atk.reach * 0.6,
-			Color(1, 1, 1, 0.9) if _atk_kind == "light" else Color(1, 0.85, 0.5))
+		var arc_col := Color(1, 1, 1, 0.9) if _atk_kind == "light" else Color(1, 0.85, 0.5)
+		if resin_t > 0.0:
+			arc_col = Color(1.0, 0.55, 0.15)
+		Fx.slash_arc(get_parent(), center, facing.angle(), _atk.size.x + _atk.reach * 0.6, arc_col)
 	else:
 		Fx.ring(get_parent(), pos + facing * _atk.size.x * 0.4, 2, 10, Color(1, 1, 1, 0.8), 0.12)
 
@@ -707,6 +731,110 @@ func _heal(input: Vector2) -> void:
 		sprite.modulate = Color.WHITE
 		_to_free()
 
+# --- items (the quick slot) ---------------------------------------------------
+
+func _cycle_item(step: int) -> void:
+	var before := Items.selected()
+	var id := Items.cycle(step)
+	if id != "" and id != before:
+		Sfx.play(self, "roll", null, -16.0, 0.0)
+
+func _start_item() -> bool:
+	var id := Items.selected()
+	if id == "":
+		return false
+	if id == "bone" and not can_go_home.call():
+		Fx.float_text(get_parent(), global_position + Vector2(-30, -56), "Impossible ici", Color(0.8, 0.8, 0.8))
+		return false
+	Items.take(id)
+	Progress.save()
+	_item = id
+	_item_done = false
+	state = State.ITEM
+	_t = 0.0
+	if lock_target:
+		facing = _to_target()
+	sprite.play("heal" if sprite.has_anim("heal") else "idle", 0.0, false, true)
+	return true
+
+## Set by the game: whether an Os du retour may be used now (not in a boss fight).
+var can_go_home: Callable = func() -> bool: return true
+
+func _use_item(input: Vector2) -> void:
+	var d: Dictionary = Items.DATA[_item]
+	var time: float = d.time
+	var throwing: bool = d.anim == "throw"
+	velocity = Vector2.ZERO if throwing else input * SPEED * 0.3
+	if not throwing and input != Vector2.ZERO:
+		facing = input.normalized()
+	if sprite.anim == "heal":
+		# A throw is the quick raising of the arm; a use, the whole gesture.
+		sprite.set_progress(minf(0.99, _t / time * (0.75 if throwing else 1.0)))
+	if not _item_done and _t >= float(d.at):
+		_item_done = true
+		_item_effect(_item)
+	if _t >= time:
+		sprite.modulate = Color.WHITE
+		_to_free()
+
+func _item_effect(id: String) -> void:
+	var aim := facing
+	var target := global_position + facing * 110.0
+	if lock_target and is_instance_valid(lock_target):
+		aim = _to_target()
+		target = lock_target.global_position
+		if target.distance_to(global_position) > 220.0:
+			target = global_position + aim * 220.0
+	match id:
+		"firebomb":
+			Thrown.throw(get_parent(), self, global_position, target)
+			Sfx.play(self, "swing_light", null, -4.0)
+		"knife":
+			Projectile.launch(get_parent(), self, global_position + aim * 10.0, aim, 300.0,
+				int(round(16 * Progress.damage_mult())), 6, "knife", 16)
+			Sfx.play(self, "swing_light", null, -4.0)
+		"resin":
+			resin_t = 60.0
+			Sfx.flare(self, "powers/burn", null, -4.0)
+			Fx.ring(get_parent(), global_position + Vector2(0, -18), 4, 24, Color(1, 0.55, 0.2), 0.4)
+			Fx.float_text(get_parent(), global_position + Vector2(-30, -56), "Arme enflammée", Color(1, 0.6, 0.25))
+		"moss":
+			poison = 0.0
+			poisoned = 0.0
+			Sfx.play(self, "heal", null, -6.0, 0.0)
+			Fx.ring(get_parent(), global_position, 4, 22, Color(0.7, 0.4, 0.9), 0.4)
+			Fx.float_text(get_parent(), global_position + Vector2(-20, -56), "Guéri", Color(0.8, 0.6, 1.0))
+		"bone":
+			Fx.pack("fx_circle", Vector2.ZERO, self, true, 1.0)
+			wants_home.emit()
+
+# --- status: burning weapon, poison ---------------------------------------------
+
+func _update_status(delta: float) -> void:
+	resin_t = maxf(0.0, resin_t - delta)
+	if poisoned > 0.0:
+		poisoned = maxf(0.0, poisoned - delta)
+		_poison_tick -= delta
+		if _poison_tick <= 0.0:
+			_poison_tick = 1.0
+			hp = maxi(0, hp - POISON_DAMAGE)
+			if hp <= 0 and not dead:
+				die()
+	else:
+		poison = maxf(0.0, poison - 8.0 * delta)
+
+## Breathing poison gas: the gauge fills; full, the hero is poisoned.
+func add_poison(amount: float) -> void:
+	if dead or poisoned > 0.0:
+		return
+	poison += amount
+	if poison >= 100.0:
+		poison = 0.0
+		poisoned = POISON_TIME
+		_poison_tick = 1.0
+		Fx.float_text(get_parent(), global_position + Vector2(-30, -56), "Empoisonné", Color(0.6, 0.9, 0.3))
+		Sfx.play(self, "player_hurt", null, -6.0)
+
 # --- being hit -----------------------------------------------------------
 
 func take_hit(dmg: int, poise_dmg: float, from: Vector2) -> bool:
@@ -753,6 +881,8 @@ func apply_stats(refill: bool) -> void:
 
 func rest() -> void:
 	apply_stats(true)
+	poison = 0.0
+	poisoned = 0.0
 
 ## Sitting by a bonfire (the game is paused in its menu meanwhile).
 func sit(on: bool) -> void:
@@ -811,7 +941,8 @@ func _crit() -> void:
 	if not _crit_done and _t >= CRIT_TIME * 0.42:
 		_crit_done = true
 		if is_instance_valid(_crit_target) and not _crit_target.dead:
-			var dmg := int(round(Weapons.moves(weapon).light.damage * CRIT_MULT * Progress.damage_mult()))
+			var dmg := int(round(Weapons.moves(weapon).light.damage * CRIT_MULT * Progress.damage_mult()
+				* Progress.weapon_mult() * (1.25 if resin_t > 0.0 else 1.0)))
 			_crit_target.take_critical(dmg, global_position)
 			Fx.hitstop(get_tree(), 0.16)
 			Fx.shake(6)

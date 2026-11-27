@@ -1,6 +1,9 @@
 # Souls-like Proto — notes for Claude
 
 - Talk to the user in French.
+- Always tell the user which visuals Claude drew itself (procedural drawing in
+  code: shapes, shaders, icons, effects) as opposed to art taken from the pack
+  or from Flare.
 - The game is played at https://hoplytes.github.io/souls-like-proto/ (the
   version shown in its bottom-right corner is the short commit id). The user
   no longer wants this link repeated at the end of every answer: give it only

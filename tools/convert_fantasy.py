@@ -207,9 +207,19 @@ FX = {"Props/Fire": "flame", "Props/Torch 1": "torch", "Props/PortalIdle": "port
       # Effects: a magic bolt (flies to the right, its head at the anchor), a
       # shockwave, the level-up swirl, a golden pillar (healing), dust.
       "Effects/Bolt": "fx_bolt", "Effects/AoE": "fx_aoe", "Effects/LevelUp": "fx_levelup", "Effects/Buff1": "fx_heal",
-      "Effects/Dash": "fx_dash"}
-FX_SCALE = {"fx_aoe": 0.5, "fx_dash": 0.5}  # big ones stored at half size ("scale" in fx.json)
-FX_ANCHORS = {"fx_bolt": (140, 62), "fx_aoe": (256, 262), "fx_levelup": (62, 96), "fx_heal": (62, 100), "fx_dash": (70, 120)}
+      "Effects/Dash": "fx_dash",
+      # A skeleton falling to pieces, a fire on the ground, a pool of poison
+      # gas, a cone of flames (from its origin, to the right), a rune circle,
+      # golden spikes, a ring of light.
+      "Props/Skeleton explosion": "fx_bones", "Props/Fire2": "fx_burn", "Props/Gas": "fx_gas",
+      "Effects/Cone": "fx_cone", "Effects/Buff2": "fx_circle", "Effects/Buff4": "fx_spikes", "Effects/Buff10": "fx_torus"}
+FX_SCALE = {"fx_aoe": 0.5, "fx_dash": 0.5, "fx_gas": 0.5, "fx_bones": 0.75}  # stored smaller ("scale" in fx.json)
+FX_ANCHORS = {"fx_bolt": (140, 62), "fx_aoe": (256, 262), "fx_levelup": (62, 96), "fx_heal": (62, 100), "fx_dash": (70, 120),
+              "fx_bones": (123, 216), "fx_burn": (128, 240), "fx_gas": (128, 200), "fx_cone": (30, 106),
+              "fx_circle": (61, 80), "fx_spikes": (62, 84), "fx_torus": (61, 80)}
+FX_ALPHA_CROP = {"fx_gas"}  # faint pixels all over the frame: crop to what shows
+# Still pictures: the light beam over items, a patch of burning ground.
+FX_STILL = {"Other/ItemRay.png": ("item_ray", 1.0), "Other/AoEFire.png": ("burning_ground", 0.5)}
 
 def convert_fx():
     """Each animation: its frames side by side, cropped to their common box.
@@ -224,7 +234,7 @@ def convert_fx():
         frames = [Image.open(os.path.join(d, f)).convert("RGBA") for f in sorted(os.listdir(d)) if f.endswith(".png")]
         box = None
         for im in frames:
-            b = im.getbbox()
+            b = im.split()[3].point(lambda v: 255 if v > 24 else 0).getbbox() if name in FX_ALPHA_CROP else im.getbbox()
             if b:
                 box = b if box is None else (min(box[0], b[0]), min(box[1], b[1]), max(box[2], b[2]), max(box[3], b[3]))
         sc = FX_SCALE.get(name, 1.0)
@@ -243,6 +253,12 @@ def convert_fx():
         anchor = FX_ANCHORS.get(name, anchor)
         meta[name] = {"frames": len(frames), "cols": cols, "w": w, "h": h, "scale": sc,
                       "ax": round((anchor[0] - box[0]) * sc), "ay": round((anchor[1] - box[1]) * sc)}
+    for path, (name, sc) in FX_STILL.items():
+        im = Image.open(os.path.join(ROOT, path)).convert("RGBA")
+        if sc != 1.0:
+            im = im.resize((round(im.width * sc), round(im.height * sc)), Image.LANCZOS)
+        im.save(os.path.join(out, name + ".png"), optimize=True)
+        meta[name] = {"still": True, "w": im.width, "h": im.height, "scale": sc}
     json.dump(meta, open(os.path.join(out, "fx.json"), "w"), indent=1)
     print("fx", list(meta))
 

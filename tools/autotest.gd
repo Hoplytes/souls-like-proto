@@ -122,7 +122,7 @@ func _shield_test(p: Player) -> void:
 	await _wait(0.2)
 	# Raised shield in each direction, with no enemy around to turn toward.
 	for e in get_tree().get_nodes_in_group("enemies"):
-		if e is SkeletonEnemy:
+		if e is SkeletonEnemy and not e is SkeletonKing:
 			e.queue_free()
 	await _wait(0.8)
 	Input.action_press("block")
@@ -141,7 +141,7 @@ func _shield_test(p: Player) -> void:
 ## against (or overlapping) the player and check that the player gets away.
 func _stick_test(p: Player) -> void:
 	for e in get_tree().get_nodes_in_group("enemies"):
-		if e is SkeletonEnemy:
+		if e is SkeletonEnemy and not e is SkeletonKing:
 			e.queue_free()
 	await _wait(0.1)
 	for case in [["adjacent", Vector2(0, -16)], ["overlapping", Vector2(2, -3)], ["two around", Vector2(-14, -8)],
@@ -176,7 +176,7 @@ func _stick_test(p: Player) -> void:
 ## Clears the enemies around and puts the hero in an open spot of the plain.
 func _clear_spot(p: Player) -> void:
 	for e in get_tree().get_nodes_in_group("enemies"):
-		if e is SkeletonEnemy:
+		if e is SkeletonEnemy and not e is SkeletonKing:
 			e.queue_free()
 	p.global_position = main.start_pos + Vector2(0, -110)
 	p.rest()
@@ -263,6 +263,8 @@ func _crit_test(p: Player) -> void:
 ## used, and screenshots of their attacks.
 func _ai_test(p: Player) -> void:
 	for model in SkeletonEnemy.TYPES:
+		if model.begins_with("boss/"):
+			continue  # the king has his own test
 		await _clear_spot(p)
 		p.max_hp = 99999
 		p.hp = 99999
@@ -332,7 +334,7 @@ func _bonfire_test(p: Player) -> void:
 func _loot_test(p: Player) -> void:
 	main.teleport_to_cell(WorldMap.CAMP + Vector2(0.5, 1.0))
 	for e in get_tree().get_nodes_in_group("enemies"):
-		if e is SkeletonEnemy:
+		if e is SkeletonEnemy and not e is SkeletonKing:
 			e.queue_free()
 	await _wait(0.5)
 	p.global_position = main.cell_of(WorldMap.CAMP + Vector2(-0.9, -0.9)) + Vector2(0, 20)
@@ -391,6 +393,88 @@ func _death_test(p: Player) -> void:
 	await _shot("98_death")
 	log_lines.append("death: souls %d, stain %s, deaths %d" % [Progress.data.souls, Progress.data.stain, Progress.data.deaths])
 
+## The quick item slot: a fire bomb and a knife on a skeleton, the burning
+## weapon, the poison gas and the moss, the Os du retour; the weapon
+## reinforced at a bonfire; the character sheet.
+func _items_test(p: Player) -> void:
+	await _clear_spot(p)
+	for id in Items.ORDER:
+		Items.add(id, 2)
+	Progress.data.item = "firebomb"
+	var sk := SkeletonEnemy.new()
+	sk.player = p
+	sk.position = p.global_position + Vector2(0, -90)
+	main.world.add_child(sk)
+	await _wait(0.2)
+	sk._hold(SkeletonEnemy.State.STAGGER, 60.0)  # a still target
+	p.facing = Vector2.UP
+	var hp0 := sk.hp
+	await _press("use_item")
+	await _wait(1.2)
+	await _shot("28_firebomb")
+	await _press("next_item")
+	await _press("use_item")
+	await _wait(0.6)
+	log_lines.append("items: fire bomb and knife took the skeleton from %d to %d hp; selected now %s" % [hp0, sk.hp, Items.selected()])
+	sk.queue_free()
+	Progress.data.item = "resin"
+	await _press("use_item")
+	await _wait(1.0)
+	log_lines.append("resin: burning weapon %.0f s" % p.resin_t)
+	p.global_position = main._gas[0]
+	await _wait(4.0)
+	log_lines.append("gas: poison gauge %.0f, poisoned %.0f s" % [p.poison, p.poisoned])
+	await _shot("29_gas")
+	Progress.data.item = "moss"
+	await _press("use_item")
+	await _wait(1.0)
+	log_lines.append("moss: poison gauge %.0f, poisoned %.0f s" % [p.poison, p.poisoned])
+	Progress.data.item = "bone"
+	await _press("use_item")
+	await _wait(2.6)
+	log_lines.append("bone: back at the bonfire %s" % (p.global_position.distance_to(main._bonfires[Progress.data.spawn].global_position) < 90.0))
+	Progress.data.titanite = 2
+	Progress.add_souls(500)
+	main._open_upgrade_menu("prairie")
+	await _wait(0.2)
+	main._upgrade_weapon("prairie")
+	await _wait(0.3)
+	await _shot("30_upgrade")
+	log_lines.append("upgrade: weapon +%d, titanite %d" % [Progress.data.weapon_lv, Progress.data.titanite])
+	main.open_status()
+	await _wait(0.3)
+	await _shot("31_status")
+	main._close_menu()
+	await _wait(0.3)
+
+## Ossian, the King of the Bones: through the fog of the plaza, his rage,
+## his fall.
+func _king_test(p: Player) -> void:
+	var a: Dictionary = main.ARENAS.king
+	var dir: Vector2 = (a.center - a.entry).normalized()
+	main.teleport_to_cell(a.entry)
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e is SkeletonEnemy and not e is SkeletonKing:
+			e.queue_free()
+	await _wait(0.8)
+	p.global_position = main.cell_of(a.center - dir * (a.radius + 0.7))
+	await _wait(0.4)
+	await _press("interact")
+	await _wait(1.5)
+	var k: SkeletonKing = main._bosses.king
+	p.max_hp = 99999
+	p.hp = 99999
+	await _wait(3.0)
+	await _shot("32_king")
+	k.take_hit(int(k.max_hp * 0.55), 0, p.global_position)
+	await _wait(6.0)
+	await _shot("33_king_rage")
+	log_lines.append("king: active %s, phase %d, sealed %s, moves seen recently %s" % [k.active, k.phase, main._sealed.keys(), k._move])
+	k.take_hit(99999, 0, p.global_position)
+	await _wait(5.0)
+	log_lines.append("king: defeated %s, sealed %s" % [Progress.data.defeated.has("king"), main._sealed.keys()])
+	p.apply_stats(true)
+
 func _music_state() -> String:
 	var out := []
 	for pl in main.music._players:
@@ -446,6 +530,8 @@ func _run() -> void:
 	await _ai_test(p)
 	await _bonfire_test(p)
 	await _loot_test(p)
+	await _items_test(p)
+	await _king_test(p)
 	# The pause menu, then the teleport menu.
 	main.open_pause_menu()
 	await _wait(0.3)

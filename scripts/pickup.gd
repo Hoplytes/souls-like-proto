@@ -10,11 +10,30 @@ var message := false
 ## Height of the ground under it (highlands).
 var lift := 0.0
 var _t := randf() * 10.0
+var _ray: Sprite2D
+
+func _ready() -> void:
+	if stain or message or not ResourceLoader.exists("res://local/fantasy/fx/item_ray.png"):
+		return
+	# A beam of light rising from the item, seen from afar (the pack's ray).
+	_ray = Sprite2D.new()
+	_ray.texture = Fx.still("item_ray")
+	_ray.centered = false
+	_ray.offset = Vector2(-25, -560)
+	_ray.scale = Vector2(0.55, 0.32)
+	_ray.position = Vector2(0, -lift + 4)
+	var add := CanvasItemMaterial.new()
+	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_ray.material = add
+	_ray.modulate = Color(1.0, 0.95, 0.8, 0.55)
+	add_child(_ray)
 
 func _process(delta: float) -> void:
 	_t += delta
 	if is_visible_in_tree() and Fx.near_camera(global_position):
 		queue_redraw()
+		if _ray:
+			_ray.modulate.a = 0.45 + 0.15 * sin(_t * 2.0)
 
 func _draw() -> void:
 	var base := Vector2(0, -lift)

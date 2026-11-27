@@ -33,6 +33,11 @@ const TYPES := {
 		"sound": "goblin", "style": "agile", "dmg": 0.9, "moves": ["stab", "rip", "spin", "dash", "pounce"]},
 	"pack/brigand_b": {"name": "Brute", "hp": 95, "poise": 45, "run": 66.0, "sight": 160.0, "souls": 70,
 		"sound": "goblin", "style": "melee", "dmg": 1.25, "moves": ["stab", "rip", "spin", "pounce"]},
+	# The king of the bones (scripts/skeleton_king.gd): a giant skeleton, boss of the ruined city.
+	"boss/king": {"name": "Ossian, le Roi des Os", "hp": 700, "poise": 150, "run": 60.0, "sight": 9999.0, "souls": 3000,
+		"sound": "skeleton", "style": "boss", "leash": 99999.0,
+		"moves": ["king_chop", "king_cleave", "king_lunge", "king_blast", "king_nova"],
+		"moves2": ["king_storm", "king_breath", "king_summon"]},
 	"pack/brigand_c": {"name": "Lanceur de couteaux", "hp": 55, "poise": 20, "run": 72.0, "sight": 200.0, "souls": 55,
 		"sound": "goblin", "style": "thrower", "dmg": 0.85, "keep": 105.0, "moves": ["stab", "rip", "throw", "dash"]},
 }
@@ -80,6 +85,23 @@ const MOVES := {
 		"kind": "rect", "size": Vector2(32, 12), "reach": 14, "lunge": 84, "cd": 4.5, "track": 3.0},
 	"pounce": {"anim": "Special1", "time": 1.4, "hit": 0.74, "range": [70, 140], "dmg": 1.15, "poise": 24,
 		"kind": "circle", "size": Vector2(24, 0), "reach": 14, "lunge": 110, "cd": 6.0, "track": 3.0},
+	# The king of the bones: the same blows, much bigger, and spells in his rage.
+	"king_chop": {"anim": "Attack1", "time": 1.3, "hit": 0.45, "range": [0, 72], "dmg": 1.6, "poise": 30,
+		"kind": "circle", "size": Vector2(38, 0), "reach": 32, "lunge": 24, "next": ["king_cleave", 0.5]},
+	"king_cleave": {"anim": "Attack2", "time": 1.45, "hit": 0.48, "range": [0, 76], "dmg": 1.9, "poise": 40,
+		"kind": "circle", "size": Vector2(44, 0), "reach": 28, "lunge": 30},
+	"king_lunge": {"anim": "AttackRun", "time": 1.55, "hit": 0.52, "range": [80, 200], "dmg": 1.7, "poise": 35,
+		"kind": "circle", "size": Vector2(34, 0), "reach": 34, "lunge": 160, "cd": 5.0, "track": 2.5},
+	"king_blast": {"anim": "Attack5", "time": 1.6, "hit": 0.42, "range": [0, 120], "dmg": 1.4, "poise": 25,
+		"kind": "blast", "size": Vector2(120, 70), "reach": 16, "cd": 7.0, "weight": 0.8, "track": 2.0},
+	"king_nova": {"anim": "Attack4", "time": 1.8, "hit": 0.68, "range": [0, 90], "dmg": 1.7, "poise": 40,
+		"kind": "nova", "size": Vector2(84, 0), "cd": 8.0, "weight": 0.8, "unblockable": true},
+	"king_storm": {"anim": "Special1", "time": 2.0, "hit": 0.72, "range": [0, 320], "dmg": 1.4, "poise": 30,
+		"kind": "storm", "size": Vector2(28, 0), "cd": 11.0, "weight": 1.3, "unblockable": true},
+	"king_breath": {"anim": "Attack3", "time": 2.2, "hit": 0.4, "range": [0, 150], "dmg": 0.5, "poise": 8,
+		"kind": "breath", "size": Vector2(150, 50), "cd": 9.0, "weight": 1.0, "track": 1.1},
+	"king_summon": {"anim": "Taunt", "time": 1.7, "hit": 0.55, "range": [0, 400], "dmg": 0.0, "poise": 0,
+		"kind": "summon", "cd": 22.0, "weight": 3.0},
 	"throw": {"anim": "Attack3", "time": 1.0, "hit": 0.47, "range": [55, 210], "dmg": 0.8, "poise": 8,
 		"kind": "knife", "speed": 235.0, "cd": 1.4, "weight": 2.0, "next": ["throw", 0.35]},
 }
@@ -121,9 +143,14 @@ var _crit_kill := false
 ## A tougher one guarding a treasure: more health, poise, damage and souls.
 var elite := false
 var _dmg_mult := 1.0
+## The type, when it is not the sprite's (the boss); the body's radius.
+var type_key := ""
+var body_radius := 7.0
+## Moves come out this much slower (< 1: faster, for an enraged boss).
+var tempo := 1.0
 
 func _ready() -> void:
-	type = TYPES.get(flare_name, TYPES["pack/skeleton_a"])
+	type = TYPES.get(type_key if type_key != "" else flare_name, TYPES["pack/skeleton_a"])
 	max_hp = type.hp
 	max_poise = type.poise
 	_dmg_mult = float(type.get("dmg", 1.0))
@@ -138,7 +165,7 @@ func _ready() -> void:
 	collision_mask = 1 | 2 | 4
 	add_to_group("enemies")
 	hit_sound = "hit_bone" if flare_name.contains("skeleton") else "hit_flesh"
-	setup_body([], 16)
+	setup_body([], 16, body_radius)
 	home = global_position
 	facing = Vector2.RIGHT.rotated(randi_range(0, 7) * PI / 4.0)
 	home_facing = facing
@@ -272,9 +299,10 @@ func alert() -> void:
 
 func _combat(to_p: Vector2, dist: float, delta: float) -> void:
 	# Too far from its post, or the hero ran away: it gives up.
-	if global_position.distance_to(home) > LEASH or dist > type.sight * 2.4:
+	var leash: float = type.get("leash", LEASH)
+	if global_position.distance_to(home) > leash or dist > type.sight * 2.4:
 		_far_t += delta
-		if _far_t > 1.5 or global_position.distance_to(home) > LEASH * 1.3:
+		if _far_t > 1.5 or global_position.distance_to(home) > leash * 1.3:
 			_go(State.RETURN)
 			return
 	else:
@@ -355,7 +383,7 @@ func _start_move(name: String, to_p: Vector2) -> void:
 	_go(State.ATTACK)
 	_move = name
 	_m = MOVES[name]
-	if not _m.kind in ["bolt", "knife", "lightning"]:
+	if not _m.kind in ["bolt", "knife", "lightning", "storm", "summon"]:
 		add_to_group("attacking")  # only the melee blows take a turn
 	_struck = false
 	if to_p.length() > 1.0:
@@ -363,8 +391,20 @@ func _start_move(name: String, to_p: Vector2) -> void:
 	if _m.has("cd"):
 		_cds[name] = _clock + float(_m.cd)
 	sprite.play(_m.anim, 0.0, false, true)
-	var windup: float = _m.time * _m.hit
+	var windup: float = _m.time * tempo * _m.hit
 	match _m.kind:
+		"storm":
+			# Lightning falls four times, one after the other: where the hero
+			# is heading, then around him.
+			_storm.clear()
+			_storm.append(player.global_position + player.velocity * 0.35)
+			for k in 3:
+				_storm.append(player.global_position + Vector2.RIGHT.rotated(randf() * TAU) * randf_range(35.0, 95.0))
+			for k in _storm.size():
+				Fx.zone(get_parent(), _storm[k], 0, "circle", _m.size, windup + k * 0.22, Color(0.7, 0.5, 1.0))
+			Sfx.flare(self, "powers/shock", global_position, -6.0)
+		"breath", "summon":
+			Sfx.play(self, "boss_effort", global_position, -2.0)
 		"lightning":
 			# It falls where the hero is heading: roll away when the circle fills.
 			_target_pos = player.global_position + player.velocity * 0.35
@@ -374,7 +414,7 @@ func _start_move(name: String, to_p: Vector2) -> void:
 			Fx.zone(get_parent(), global_position, 0, "circle", _m.size, windup, Color(0.8, 0.3, 1.0))
 
 func _attack(to_p: Vector2, dist: float, delta: float) -> void:
-	var time: float = _m.time
+	var time: float = _m.time * tempo
 	var hit_t: float = time * float(_m.hit)
 	sprite.set_progress(_t / time)
 	velocity = Vector2.ZERO
@@ -403,6 +443,17 @@ func _attack(to_p: Vector2, dist: float, delta: float) -> void:
 		_struck = true
 		sprite.modulate = base_modulate()
 		_strike()
+	# A breath of fire sweeps slowly after the hero, burning while it lasts.
+	if _m.kind == "breath" and _struck and _t < hit_t + 0.8:
+		_turn(to_p, float(_m.get("track", 1.0)), delta)
+		if is_instance_valid(_cone):
+			_cone.rotation = facing.angle()
+		_breath_tick -= delta
+		if _breath_tick <= 0.0:
+			_breath_tick = 0.16
+			var dmg := int(round(BASE_DAMAGE * float(_m.dmg) * _dmg_mult))
+			Hitbox.spawn(get_parent(), self, global_position + Vector2(0, -18) + facing * (_m.size.x * 0.5 + 10.0),
+				facing.angle(), "rect", _m.size, dmg, int(_m.poise), 8, 0.1)
 	# Chained attacks cut the recovery short.
 	if _struck and _m.has("next") and _t >= time * 0.78:
 		var nxt: Array = _m.next
@@ -418,6 +469,14 @@ func _attack(to_p: Vector2, dist: float, delta: float) -> void:
 		if type.style == "agile" and randf() < 0.35:
 			_intent = "back"  # brigands hop back after their combo
 			_think = 0.5
+
+var _storm: Array[Vector2] = []
+var _cone: AnimatedSprite2D
+var _breath_tick := 0.0
+
+## Raising the dead (the boss): see SkeletonKing.
+func _summon() -> void:
+	pass
 
 func _strike() -> void:
 	var dmg := int(round(BASE_DAMAGE * float(_m.dmg) * _dmg_mult))
@@ -453,6 +512,28 @@ func _strike() -> void:
 				Sfx.flare(self, "powers/fireball", global_position, -8.0)
 			else:
 				Sfx.play(self, "swing_light", global_position, -4.0)
+		"storm":
+			for k in _storm.size():
+				var at: Vector2 = _storm[k]
+				var strike := func() -> void:
+					Fx.lightning(parent, at)
+					Fx.ring(parent, at, 4, _m.size.x, Color(0.8, 0.7, 1.0), 0.3, 3)
+					Hitbox.spawn(parent, self, at + Vector2(0, -14), 0, "circle", _m.size, dmg, poise_dmg, 8, 0.12, true)
+					Sfx.flare(self, "powers/thunder", at, -4.0)
+					Fx.shake(2)
+				if k == 0:
+					strike.call()
+				else:
+					get_tree().create_timer(k * 0.22, false).timeout.connect(strike)
+		"breath":
+			_breath_tick = 0.0
+			_cone = Fx.pack("fx_cone", Vector2(0, -26) * sprite.scale.y + facing * 8.0, self, true, 0.85)
+			_cone.rotation = facing.angle()
+			_cone.z_index = 2
+			Sfx.flare(self, "powers/fireball", global_position, -2.0)
+			Sfx.flare(self, "powers/burn", global_position, -4.0)
+		"summon":
+			_summon()
 		"lightning":
 			Fx.lightning(parent, _target_pos)
 			Fx.ring(parent, _target_pos, 4, _m.size.x, Color(0.8, 0.7, 1.0), 0.3, 3)
@@ -590,6 +671,21 @@ func die() -> void:
 	super.die()
 	_bar.queue_free()
 	var t := create_tween()
+	if type.sound == "skeleton":
+		# A skeleton falls to pieces: a heap of bones in a puff of dust.
+		sprite.visible = false
+		var bones := Fx.pack("fx_bones", global_position + Vector2(0, -sprite.lift), get_parent(), true,
+			0.85 * sprite.scale.x, true)
+		bones.modulate = base_modulate()
+		bones.z_index = z_index
+		Sfx.play(self, "skeleton_death", global_position, -6.0)
+		var bt := bones.create_tween()
+		bt.tween_interval(6.0)
+		bt.tween_property(bones, "modulate:a", 0.0, 2.0)
+		bt.tween_callback(bones.queue_free)
+		t.tween_interval(0.2)
+		t.tween_callback(queue_free)
+		return
 	t.tween_interval(1.5)
 	t.tween_property(self, "modulate:a", 0.0, 1.0)
 	t.tween_callback(queue_free)

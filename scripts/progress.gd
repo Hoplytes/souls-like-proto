@@ -18,6 +18,8 @@ static func fresh() -> Dictionary:
 		"flasks": 3, "lit": ["prairie"], "spawn": "prairie", "defeated": {}, "taken": {},
 		"stain": {},  # {"x", "y": world position, "souls"}
 		"deaths": 0, "kills": 0, "intro": false,
+		"items": {"bone": 1}, "item": "bone",  # consumables carried, the one in the quick slot
+		"weapon_lv": 0, "titanite": 0,  # the weapon's reinforcement, the shards to raise it
 	}
 
 static func new_game() -> void:
@@ -36,7 +38,7 @@ static func load_game() -> void:
 		for k in d:
 			if data.has(k):
 				data[k] = d[k]
-	for k in ["souls", "level", "vigor", "endurance", "strength", "flasks", "deaths", "kills"]:
+	for k in ["souls", "level", "vigor", "endurance", "strength", "flasks", "deaths", "kills", "weapon_lv", "titanite"]:
 		data[k] = int(data[k])
 
 static func ensure_loaded() -> void:
@@ -81,6 +83,27 @@ static func level_up(stat: String) -> bool:
 
 static func add_souls(n: int) -> void:
 	data.souls = int(data.souls) + n
+
+# --- the weapon's reinforcement (titanite shards and souls, at a bonfire) ------
+
+const WEAPON_MAX := 5
+const UPGRADE_COST := [[1, 200], [1, 400], [2, 700], [2, 1000], [3, 1500]]  # [shards, souls] for +1..+5
+
+static func weapon_mult(lv: int = -1) -> float:
+	return 1.0 + 0.12 * (int(data.weapon_lv) if lv < 0 else lv)
+
+static func upgrade_weapon() -> bool:
+	var lv := int(data.weapon_lv)
+	if lv >= WEAPON_MAX:
+		return false
+	var cost: Array = UPGRADE_COST[lv]
+	if int(data.titanite) < cost[0] or int(data.souls) < cost[1]:
+		return false
+	data.titanite = int(data.titanite) - cost[0]
+	data.souls = int(data.souls) - cost[1]
+	data.weapon_lv = lv + 1
+	save()
+	return true
 
 ## Base damage multiplier of the hero's attacks, shown in the level-up menu.
 static func damage_text(strength: int) -> String:
