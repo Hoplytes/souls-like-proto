@@ -26,6 +26,9 @@ et plus).
 - **Renforcer l'arme** au feu de camp, de +1 à +5, avec des **éclats de titanite** (coffres, élites) et des âmes.
 - **Poison** : des nappes de gaz dans les Terres mortes remplissent une jauge ; pleine, le héros est empoisonné et perd
   de la santé un moment (la mousse violette ou un feu de camp en guérissent).
+- **Squelettes dormants** : des tas d'os au cimetière, dans les rues de la ville en ruine et dans le labyrinthe se
+  relèvent quand on approche.
+- **Le marchand** du village, accroupi près du puits : objets contre des âmes, et quelques éclats de titanite.
 - **Fiche du personnage** dans le menu pause : niveau, caractéristiques, arme, fioles, objets, progression.
 - **Élites** : plus grands, plus sombres et bien plus coriaces, ils gardent les trésors (camp, cimetière, donjon),
   rapportent cinq fois plus d'âmes et souvent un éclat de titanite.

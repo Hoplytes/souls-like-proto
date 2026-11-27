@@ -20,6 +20,7 @@ static func fresh() -> Dictionary:
 		"deaths": 0, "kills": 0, "intro": false,
 		"items": {"bone": 1}, "item": "bone",  # consumables carried, the one in the quick slot
 		"weapon_lv": 0, "titanite": 0,  # the weapon's reinforcement, the shards to raise it
+		"shop_titanite": 0,  # shards bought from the merchant
 	}
 
 static func new_game() -> void:
@@ -38,7 +39,7 @@ static func load_game() -> void:
 		for k in d:
 			if data.has(k):
 				data[k] = d[k]
-	for k in ["souls", "level", "vigor", "endurance", "strength", "flasks", "deaths", "kills", "weapon_lv", "titanite"]:
+	for k in ["souls", "level", "vigor", "endurance", "strength", "flasks", "deaths", "kills", "weapon_lv", "titanite", "shop_titanite"]:
 		data[k] = int(data[k])
 
 static func ensure_loaded() -> void:

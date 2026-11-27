@@ -475,6 +475,35 @@ func _king_test(p: Player) -> void:
 	log_lines.append("king: defeated %s, sealed %s" % [Progress.data.defeated.has("king"), main._sealed.keys()])
 	p.apply_stats(true)
 
+## A heap of bones standing up in the graveyard; the merchant of the village.
+func _heaps_and_merchant_test(p: Player) -> void:
+	main.teleport_to_cell(WorldMap.GRAVEYARD + Vector2(-2.0, 3.6))
+	await _wait(1.0)
+	var heap: SkeletonEnemy = null
+	for e in main._enemies:
+		if is_instance_valid(e) and e.dormant:
+			if heap == null or e.global_position.distance_to(p.global_position) < heap.global_position.distance_to(p.global_position):
+				heap = e
+	p.global_position = heap.global_position + Vector2(0, 60)
+	await _wait(1.4)
+	log_lines.append("heap of bones: risen %s, fighting %s" % [heap.sprite.visible, heap.is_in_group("enemies")])
+	await _shot("34_risen")
+	main.teleport_to_cell(WorldMap.VILLAGE + Vector2(2.6, 0.6))
+	await _wait(0.8)
+	p.global_position = main.cell_of(WorldMap.VILLAGE + Vector2(2.6, -0.6)) + Vector2(0, 26)
+	await _wait(0.4)
+	log_lines.append("merchant: hint '%s'" % main.hud.hint)
+	Progress.add_souls(1000)
+	var t0 := int(Progress.data.titanite)
+	await _press("interact")
+	await _wait(0.4)
+	main._buy(5)
+	await _wait(0.2)
+	await _shot("35_merchant")
+	log_lines.append("merchant: bought a shard %s" % (int(Progress.data.titanite) == t0 + 1))
+	main._close_menu()
+	await _wait(0.3)
+
 func _music_state() -> String:
 	var out := []
 	for pl in main.music._players:
@@ -531,6 +560,7 @@ func _run() -> void:
 	await _bonfire_test(p)
 	await _loot_test(p)
 	await _items_test(p)
+	await _heaps_and_merchant_test(p)
 	await _king_test(p)
 	# The pause menu, then the teleport menu.
 	main.open_pause_menu()

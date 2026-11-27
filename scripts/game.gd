@@ -246,6 +246,7 @@ func _ready() -> void:
 	_place_loot()
 	_place_gas()
 	_place_messages()
+	_place_merchant()
 	_spawn_stain()
 
 	_modulate = CanvasModulate.new()
@@ -1308,6 +1309,13 @@ func _spawn_enemies() -> void:
 		_add_enemy(["pack/brigand_a", "pack/brigand_b", "pack/brigand_c", "pack/brigand_b"][k], WorldMap.CAMP + Vector2.RIGHT.rotated(a) * 2.0)
 		_add_enemy(["pack/skeleton_b", "pack/skeleton_a", "pack/skeleton_b", "pack/skeleton_c"][k], WorldMap.GRAVEYARD + Vector2.RIGHT.rotated(a) * 2.3)
 		_add_enemy(["pack/skeleton_a", "pack/skeleton_c", "pack/skeleton_a", "pack/skeleton_c"][k], WorldMap.CITY + Vector2.RIGHT.rotated(a) * 5.4)
+	# Heaps of bones that stand up when the hero comes near: in the
+	# graveyard, the ruined city's streets, the labyrinth.
+	for d in [["pack/skeleton_a", WorldMap.GRAVEYARD + Vector2(-2.0, 1.2)], ["pack/skeleton_a", WorldMap.GRAVEYARD + Vector2(2.2, -0.6)],
+			["pack/skeleton_c", WorldMap.GRAVEYARD + Vector2(1.0, 3.2)], ["pack/skeleton_a", WorldMap.CITY + Vector2(6.2, 1.5)],
+			["pack/skeleton_a", WorldMap.CITY + Vector2(-1.0, 6.5)], ["pack/skeleton_a", HALL_AT + Vector2(15.5, 18.0)],
+			["pack/skeleton_c", HALL_AT + Vector2(12.0, 15.5)], ["pack/skeleton_a", HALL_AT + Vector2(18.0, 11.0)]]:
+		_add_enemy(d[0], d[1], false, true)
 	# Elites guarding the treasures.
 	_add_enemy("pack/brigand_b", WorldMap.CAMP + Vector2(-1.7, -0.3), true)
 	_add_enemy("pack/skeleton_c", WorldMap.GRAVEYARD + Vector2(0.5, -2.3), true)
@@ -1320,10 +1328,11 @@ func _spawn_enemies() -> void:
 	for k in mini(guards.size(), spots.size()):
 		_add_enemy(guards[k], HALL_AT + spots[k])
 
-func _add_enemy(model: String, c: Vector2, elite := false) -> void:
+func _add_enemy(model: String, c: Vector2, elite := false, dormant := false) -> void:
 	var s := SkeletonEnemy.new()
 	s.flare_name = model
 	s.elite = elite
+	s.dormant = dormant
 	s.position = cell_of(c)
 	s.player = player
 	world.add_child(s)
@@ -1832,6 +1841,78 @@ func _breathe_gas(delta: float) -> void:
 		if absf(d.x) < 60.0 and (d.x / 46.0) * (d.x / 46.0) + (d.y / 23.0) * (d.y / 23.0) < 1.0:
 			player.add_poison(32.0 * delta)
 			return
+
+# --- the merchant ------------------------------------------------------------------
+
+## A hooded merchant crouching by the village's well (a brigand of the pack,
+## at peace): souls for items, and a few titanite shards.
+const SHOP := [
+	["firebomb", 1, 120], ["knife", 5, 100], ["moss", 1, 80], ["resin", 1, 250], ["bone", 1, 150], ["titanite", 1, 900],
+]
+const SHOP_TITANITE := 3  # shards he has to sell
+const MERCHANT_LINES := [
+	["Tiens, un mort qui marche…", "Des âmes contre mes trésors ? Approche."],
+	["Le feu faiblit, mais le commerce continue.", "Que te faut-il ?"],
+	["Encore toi ? Tu reviens de loin.", "Ou d'en dessous. Peu importe, achète."],
+	["Ossian règne sur la ville en ruine.", "Le feu brûle bien les os, dit-on."],
+	["Le gaz des Terres mortes ronge les poumons.", "La mousse violette, c'est moi qui la vends."],
+]
+
+func _place_merchant() -> void:
+	var cell := WorldMap.VILLAGE + Vector2(2.6, -0.6)
+	var at := cell_of(cell)
+	var npc := HdSprite.flare("pack/brigand_b")
+	npc.position = at
+	npc.facing8 = Vector2(-1, 1)  # toward the well and the square
+	npc.modulate = Color(0.8, 0.85, 1.0)
+	npc.play("crouch", 2.0)
+	world.add_child(npc)
+	_collide(at, 8)
+	_add_use({"at": at, "r": 40.0, "text": "Parler au marchand", "act": func() -> void:
+		_line = MERCHANT_LINES[randi() % MERCHANT_LINES.size()]
+		_open_shop(0)})
+
+var _line: Array = []  # what the merchant said this time
+
+func _open_shop(focus: int) -> void:
+	var d := Progress.data
+	var items := [["« %s %s »" % _line, null], ["", null], ["Vos âmes : %d" % d.souls, null]]
+	for k in SHOP.size():
+		var e: Array = SHOP[k]
+		var id: String = e[0]
+		var label := ""
+		if id == "titanite":
+			var left := SHOP_TITANITE - int(d.get("shop_titanite", 0))
+			label = "Éclat de titanite — %d âmes   (%s)" % [e[2], "il en reste %d" % left if left > 0 else "épuisé"]
+		else:
+			var name: String = Items.DATA[id].name
+			label = "%s%s — %d âmes   (vous en avez %d)" % [name, " ×%d" % e[1] if e[1] > 1 else "", e[2], Items.count(id)]
+		items.append([label, _buy.bind(k)])
+	items.append(["", null])
+	items.append(["Au revoir", _close_menu])
+	_open_menu("Le marchand", items, "Les âmes dépensées ici ne reviennent pas", focus)
+
+func _buy(k: int) -> void:
+	var e: Array = SHOP[k]
+	var id: String = e[0]
+	var d := Progress.data
+	var ok := int(d.souls) >= int(e[2])
+	if id == "titanite":
+		ok = ok and int(d.get("shop_titanite", 0)) < SHOP_TITANITE
+	else:
+		ok = ok and Items.count(id) < int(Items.DATA[id].max)
+	if ok:
+		d.souls = int(d.souls) - int(e[2])
+		if id == "titanite":
+			d.titanite = int(d.titanite) + 1
+			d.shop_titanite = int(d.get("shop_titanite", 0)) + 1
+		else:
+			Items.add(id, int(e[1]))
+		Progress.save()
+		Sfx.flare(self, "flying_loot", null, -6.0)
+	else:
+		Sfx.flare(self, "no_mana", null, -4.0)
+	_open_shop(k)
 
 ## Messages left on the ground, Souls style: advice (or a warning) to read.
 const MESSAGES := [

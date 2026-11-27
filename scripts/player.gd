@@ -681,7 +681,7 @@ func receive_hit(h: Hitbox) -> void:
 		stamina = minf(max_stamina, stamina + 10.0)
 		_guard_flash = 0.3
 		Sfx.play(self, "parry", null, 0.0, 0.03)
-		Fx.ring(get_parent(), spark, 2, 26, Color(1, 0.9, 0.4), 0.25, 3)
+		Fx.pack("fx_torus", global_position + facing * 10.0, get_parent(), true, 0.75).z_index = 1  # the pack's ring of light
 		Fx.hit_spark(get_parent(), spark)
 		Fx.float_text(get_parent(), global_position + Vector2(0, -56), "Parade !", Color(1, 0.9, 0.4))
 		Fx.hitstop(get_tree(), 0.12)
@@ -944,6 +944,7 @@ func _crit() -> void:
 			var dmg := int(round(Weapons.moves(weapon).light.damage * CRIT_MULT * Progress.damage_mult()
 				* Progress.weapon_mult() * (1.25 if resin_t > 0.0 else 1.0)))
 			_crit_target.take_critical(dmg, global_position)
+			Fx.pack("fx_spikes", _crit_target.global_position, get_parent(), true, 0.9).z_index = 1  # golden spikes (pack)
 			Fx.hitstop(get_tree(), 0.16)
 			Fx.shake(6)
 			Sfx.play(self, "swing_heavy", null, -2.0)

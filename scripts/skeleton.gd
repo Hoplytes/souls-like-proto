@@ -148,6 +148,10 @@ var type_key := ""
 var body_radius := 7.0
 ## Moves come out this much slower (< 1: faster, for an enraged boss).
 var tempo := 1.0
+## A skeleton lying as a heap of bones, rising when the hero comes near.
+var dormant := false
+var _heap: AnimatedSprite2D
+const WAKE_RANGE := 80.0
 
 func _ready() -> void:
 	type = TYPES.get(type_key if type_key != "" else flare_name, TYPES["pack/skeleton_a"])
@@ -163,7 +167,8 @@ func _ready() -> void:
 	_guard = type.get("guard", 0.0)
 	collision_layer = 4
 	collision_mask = 1 | 2 | 4
-	add_to_group("enemies")
+	if not dormant:
+		add_to_group("enemies")  # a heap of bones is not one yet
 	hit_sound = "hit_bone" if flare_name.contains("skeleton") else "hit_flesh"
 	setup_body([], 16, body_radius)
 	home = global_position
@@ -179,6 +184,35 @@ func _ready() -> void:
 	_bar = EnemyBar.new()
 	_bar.enemy = self
 	add_child(_bar)
+	if dormant:
+		sprite.visible = false
+		invulnerable = true
+		collision_layer = 0
+		hurtbox.set_deferred("monitorable", false)
+		_heap = Fx.pack("fx_bones", Vector2.ZERO, self, true, 0.85, true)
+		_heap.stop()
+		_heap.frame = _heap.sprite_frames.get_frame_count("default") - 1
+
+## The bones gather and the skeleton stands up, ready to fight.
+func _rise() -> void:
+	dormant = false
+	_heap.play_backwards()
+	Sfx.play(self, "skeleton_death", global_position, -4.0)
+	Fx.dust(get_parent(), global_position, Vector2.ZERO)
+	_go(State.ALERT)
+	_t = -0.75  # while the bones gather
+	var t := create_tween()
+	t.tween_interval(0.75)
+	t.tween_callback(func():
+		if dead:
+			return
+		_heap.queue_free()
+		sprite.visible = true
+		invulnerable = false
+		collision_layer = 4
+		hurtbox.set_deferred("monitorable", true)
+		add_to_group("enemies")
+		Sfx.flare(self, "enemies/skeleton_phys", global_position, -6.0))
 
 func make_sprite():
 	return HdSprite.flare(flare_name)
@@ -208,11 +242,20 @@ func _physics_process(delta: float) -> void:
 	var dist := to_p.length()
 	match state:
 		State.IDLE:
-			_idle(delta)
-			if ok and _notices(to_p, dist):
-				alert()
+			if dormant:
+				velocity = Vector2.ZERO
+				if ok and dist < WAKE_RANGE:
+					facing = to_p.normalized()
+					_rise()
+			else:
+				_idle(delta)
+				if ok and _notices(to_p, dist):
+					alert()
 		State.ALERT:
 			velocity = Vector2.ZERO
+			if _t < 0.0:  # still rising from its bones
+				move_and_slide()
+				return
 			_turn(to_p, 9.0, delta)
 			sprite.play("idle", 2.0)
 			if _t >= 0.4:
@@ -284,6 +327,9 @@ func _notices(to_p: Vector2, dist: float) -> bool:
 
 func alert() -> void:
 	if state != State.IDLE and state != State.RETURN:
+		return
+	if dormant:
+		_rise()  # its companions' fight wakes it
 		return
 	_go(State.ALERT)
 	_cooldown = randf_range(0.2, 0.8)
